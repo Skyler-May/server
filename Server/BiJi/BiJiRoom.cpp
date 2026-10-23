@@ -918,6 +918,8 @@ namespace NiuMa
 			diamondNeed = getDiamondNeed();
 		bool test = true;
 		GameAvatar::Ptr ptr;
+		// 本局局号（惰性计算一次，供本局所有玩家共用）
+		int roundNo = 0;
 		for (int i = 0; i < getMaxPlayerNums(); i++) {
 			ptr = getAvatar(i);
 			avatar1 = dynamic_cast<BiJiAvatar*>(ptr.get());
@@ -939,6 +941,43 @@ namespace NiuMa
 					winGold = static_cast<int64_t>(delta);
 				}
 				avatar1->setWinGold(winGold);
+
+				// ============================================================
+				// 写入逐局明细（供聚合平台结算）
+				//
+				// 比鸡原先只把押金余额写进 cash_pledge，没有逐局流水，
+				// 聚合平台因此拿不到输赢数据（返水/打码/风控全部失效）。
+				// 这里在押金更新之前插入一条明细，`win_gold` 为扣抽水后的
+				// 实际输赢，与玩家金币变化一致。
+				//
+				// 失败不阻断结算：明细只用于对账，不能因写日志失败影响玩家资金。
+				// ============================================================
+				{
+					// 局号：该场地已有最大局号 + 1（比鸡没有内存侧局号计数器，
+					// 与其他游戏的 round_no 语义保持一致，便于平台按局聚合）
+					if (roundNo == 0) {
+						std::stringstream qs;
+						qs << "select max(`round_no`) from `game_bi_ji_round` where `venue_id` = \"" << getId() << "\"";
+						std::shared_ptr<MysqlCountTask> maxTask = std::make_shared<MysqlCountTask>(qs.str());
+						MysqlPool::getSingleton().syncQuery(maxTask);
+						roundNo = maxTask->getSucceed() ? maxTask->getCount() + 1 : 1;
+					}
+
+					std::stringstream rs;
+					rs << "insert into `game_bi_ji_round`"
+					   << " (`venue_id`, `round_no`, `player_id`, `seat`, `score`, `di_zhu`, `win_gold`, `tax`, `time`)"
+					   << " values(\"" << getId() << "\", " << roundNo << ", \"" << avatar1->getPlayerId() << "\", "
+					   << i << ", " << score << ", " << _diZhu << ", " << winGold << ", "
+					   << static_cast<int64_t>(tax) << ", now())";
+					std::shared_ptr<MysqlCommonTask> roundTask =
+						std::make_shared<MysqlCommonTask>(rs.str(), MysqlQueryTask::QueryType::Insert);
+					MysqlPool::getSingleton().syncQuery(roundTask);
+					if (!roundTask->getSucceed()) {
+						ErrorS << "写入比鸡逐局明细失败，场地Id: " << getId()
+							   << ", 玩家Id: " << avatar1->getPlayerId();
+					}
+				}
+
 				cashPledge = avatar1->getCashPledge();
 				cashPledge += winGold;
 				if (cashPledge < goldNeed) {
