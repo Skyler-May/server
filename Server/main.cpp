@@ -37,6 +37,8 @@
 #include "GuanDan/GuanDanLoader.h"
 #include "GuanDan/GuanDanMessages.h"
 #include "Landlord/LandlordMessages.h"
+#include "Landlord/LandlordRoomHandler.h"
+#include "Landlord/LandlordLoader.h"
 #include "GuanDan/GuanDanCandidateOrder.h"
 #include "Game/DebtLiquidation.h"
 
@@ -333,6 +335,8 @@ int main(int argc, char* argv[]) {
         loader = std::make_shared<NiuMa::NiuNiu100Loader>();
         NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::GuanDanLoader>();
+        loader = std::make_shared<NiuMa::LandlordLoader>();
+        NiuMa::VenueManager::getSingleton().registLoader(loader);
         NiuMa::VenueManager::getSingleton().registLoader(loader);
 
         // 创建场地外消息处理器线程池
@@ -382,6 +386,10 @@ int main(int argc, char* argv[]) {
         // 创建掼蛋游戏房间内部网络消息处理器
         for (int i = 0; i < threadNum; i++) {
             handler = std::make_shared<NiuMa::GuanDanRoomHandler>();
+            handler->registSelf();
+            handlers.push_back(handler);
+            NiuMa::VenueManager::getSingleton().registHandler(handler);
+            handler = std::make_shared<NiuMa::LandlordRoomHandler>();
             handler->registSelf();
             handlers.push_back(handler);
             NiuMa::VenueManager::getSingleton().registHandler(handler);
