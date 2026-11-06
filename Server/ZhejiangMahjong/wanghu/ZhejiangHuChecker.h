@@ -1,0 +1,69 @@
+// ZhejiangHuChecker.h
+// 浙江麻将胡牌判定封装（基于网狐 GameLogic::GetHuInfo）
+// 本类不依赖 NiuMa 框架，便于独立单测；牌值沿用网狐编码：
+//   0x01-0x09 万子、0x11-0x19 条子、0x21-0x29 筒子、0x31-0x37 东南西北中发白
+
+#ifndef _NIU_MA_ZHEJIANG_HU_CHECKER_H_
+#define _NIU_MA_ZHEJIANG_HU_CHECKER_H_
+
+#include "StdAfx.h"
+#include "GameLogic.h"
+
+#include <string>
+#include <vector>
+
+namespace NiuMa
+{
+	// 胡牌结果
+	struct ZhejiangHuResult
+	{
+		bool hu = false;			// 是否可胡
+		bool zimo = false;			// 是否自摸
+		int fan = 0;				// 番数（简化：按网狐 tagHuCourt 的计分项累加）
+		int baseScore = 0;			// 基础分
+		std::string desc;			// 牌型描述
+
+		void reset() {
+			hu = false;
+			zimo = false;
+			fan = 0;
+			baseScore = 0;
+			desc.clear();
+		}
+	};
+
+	class ZhejiangHuChecker
+	{
+	public:
+		ZhejiangHuChecker();
+		virtual ~ZhejiangHuChecker();
+
+	public:
+		// 设置财神牌（0 表示无财神）
+		void setKingCard(BYTE card);
+		BYTE getKingCard() const;
+
+		/**
+		 * 判定是否可胡
+		 * @param cards 手牌（网狐牌值，14 张含摸到的牌）
+		 * @param currentCard 当前摸到/打出的牌
+		 * @param zimo 是否自摸
+		 * @param result 输出结果
+		 * @return 是否可胡
+		 */
+		bool checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result);
+
+		// 牌值转文字（便于日志）
+		static std::string cardToText(BYTE card);
+
+	private:
+		// 把手牌转换为网狐的牌索引数组（每种牌的张数）
+		static void buildCardIndex(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX]);
+
+	private:
+		mutable CGameLogic _logic;
+		BYTE _kingCard;
+	};
+}
+
+#endif // !_NIU_MA_ZHEJIANG_HU_CHECKER_H_
