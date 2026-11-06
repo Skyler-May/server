@@ -195,6 +195,9 @@ node tools/niuma-bot/bot.mjs p1001 0 1031 <房号>
 | **session 时序** | 发牌/轮转消息客户端收不到 | 发送前用 `PlayerManager` 里的**当前 session** 刷新替身 |
 | **同账号抢占** | 客户端反复 reconnect/disconnect，牌局卡住 | 测试时只保留一个客户端（关掉残留的 H5 页面/浏览器） |
 | 进房授权 | `MsgEnterVenue` 直接进 venueId 报 `not authorized` | 必须走 `enter/district` 或 `enter/number` |
+| **复制模块后 include guard 重名** | 编译报 `PaoDeKuaiLoader is not a member of NiuMa` | 复制模块后先批量替换 `_NIU_MA_<OLD>_` → `_NIU_MA_<NEW>_` |
+| **MSVC for 作用域泄漏** | `i was not declared in this scope`（循环内 `for(i=0;...)`，函数后面继续用 `i`） | 在函数体开头补 `int i = 0;`（脚本见 `tools/wanghu-port/zhejiang-mahjong/fix-zjmj-scope.mjs`） |
+| **厂商源码拼写错误** | `const LONG_SCORE_XXX`（LONG 与变量名黏在一起，MSVC 也不该过） | 改为 `const LONG SCORE_XXX` |
 | 场地未激活 | `enter/number` 报 `Venue not exist` | `venue.status = 0` |
 
 ---
