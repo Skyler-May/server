@@ -264,6 +264,20 @@ namespace NiuMa
 		_wall.pop_back();
 		avatar->addTile(tile);
 
+		// 暗杠检查（杠完补摸，最多连续 4 次）
+		int kongLoop = 0;
+		while (kongLoop < 4 && tryConcealedKong(seat)) {
+			kongLoop++;
+			if (_wall.empty()) {
+				InfoS << "浙江麻将(ID:" << getId() << ")牌墙已空，流局";
+				settle(-1, false, -1, 0, 0, "流局");
+				return;
+			}
+			tile = _wall.back();
+			_wall.pop_back();
+			avatar->addTile(tile);
+		}
+
 		refreshSessions();
 		MsgZhejiangMahjongDraw msg;
 		msg.seat = seat;
@@ -350,6 +364,9 @@ namespace NiuMa
 		// 点炮检查（优先于碰）
 		if (checkRobHu(seat))
 			return true;
+		// 杠优先于碰
+		if (checkGang(seat))
+			return true;
 		// 碰牌检查
 		if (checkPong(seat))
 			return true;
@@ -406,6 +423,81 @@ namespace NiuMa
 		return true;
 	}
 
+	// 明杠：其他家有 3 张同牌
+	bool ZhejiangMahjongRoom::checkGang(int fromSeat) {
+		if (_lastDiscardTile == 0)
+			return false;
+		for (int i = 1; i < getMaxPlayerNums(); i++) {
+			int seat = (fromSeat + i) % getMaxPlayerNums();
+			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+			if (avatar == nullptr)
+				continue;
+			int same = 0;
+			const std::vector<int>& hand = avatar->getHand();
+			for (size_t k = 0; k < hand.size(); k++) {
+				if (hand[k] == _lastDiscardTile)
+					same++;
+			}
+			if (same < 3)
+				continue;
+			for (int n = 0; n < 3; n++)
+				avatar->removeTile(_lastDiscardTile);
+			avatar->addMeld(_lastDiscardTile);
+
+			MsgZhejiangMahjongGang msg;
+			msg.seat = seat;
+			msg.tile = _lastDiscardTile;
+			msg.fromSeat = fromSeat;
+			msg.concealed = false;
+			sendMessageToAll(msg);
+			sendHand(seat);
+			InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 明杠 0x"
+				<< std::hex << _lastDiscardTile << std::dec << "（来自座位" << fromSeat << "）";
+
+			// 杠后补摸一张，再出牌
+			drawTile(seat);
+			return true;
+		}
+		return false;
+	}
+
+	// 暗杠：自己摸牌后手上有 4 张同牌
+	bool ZhejiangMahjongRoom::tryConcealedKong(int seat) {
+		if (_gameState != GameState::Playing)
+			return false;
+		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+		if (avatar == nullptr)
+			return false;
+		const std::vector<int>& hand = avatar->getHand();
+		int target = 0;
+		for (size_t i = 0; i < hand.size(); i++) {
+			int c = 0;
+			for (size_t k = 0; k < hand.size(); k++) {
+				if (hand[k] == hand[i])
+					c++;
+			}
+			if (c >= 4 && hand[i] != _kingCard) {
+				target = hand[i];
+				break;
+			}
+		}
+		if (target == 0)
+			return false;
+		for (int n = 0; n < 4; n++)
+			avatar->removeTile(target);
+		avatar->addMeld(target);
+
+		MsgZhejiangMahjongGang msg;
+		msg.seat = seat;
+		msg.tile = target;
+		msg.fromSeat = -1;
+		msg.concealed = true;
+		sendMessageToAll(msg);
+		sendHand(seat);
+		InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 暗杠 0x"
+			<< std::hex << target << std::dec;
+		return true;
+	}
 	bool ZhejiangMahjongRoom::checkPong(int fromSeat) {
 		if (_lastDiscardTile == 0)
 			return false;

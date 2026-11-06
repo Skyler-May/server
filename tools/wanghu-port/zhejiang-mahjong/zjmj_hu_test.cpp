@@ -69,5 +69,23 @@ int main() {
     };
     testCase("散牌", garbage, 0x02, false, 0);
 
+    // 9) 碰/杠后的胡牌：2 组碰 + 手里 123万 456万 88条（8 张 = 2 面子 + 将）
+    {
+        ZhejiangHuChecker checker;
+        std::vector<BYTE> h = { 0x01,0x02,0x03, 0x04,0x05,0x06, 0x11,0x11 };
+        ZhejiangHuResult r;
+        bool hu = checker.checkHu(h, 0x11, true, r, 2);
+        printf("碰2组+8张手牌 => %s 番:%d 得分:%d %s\n\n", hu ? "可胡" : "不可胡", r.fan, r.score, r.desc.c_str());
+    }
+
+    // 10) 4 组碰后：手里只剩将牌 99筒
+    {
+        ZhejiangHuChecker checker;
+        std::vector<BYTE> h = { 0x29,0x29 };
+        ZhejiangHuResult r;
+        bool hu = checker.checkHu(h, 0x29, true, r, 4);
+        printf("碰4组+将牌 => %s 番:%d 得分:%d %s\n\n", hu ? "可胡" : "不可胡", r.fan, r.score, r.desc.c_str());
+    }
+
     return 0;
 }

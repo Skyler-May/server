@@ -60,6 +60,12 @@ namespace NiuMa
 
 		// 出牌后检查其他家碰牌（自动碰）
 		bool checkPong(int fromSeat);
+
+		// 出牌后检查其他家明杠
+		bool checkGang(int fromSeat);
+
+		// 摸牌后检查自己是否可以暗杠（返回 true 表示杠了，需要补摸）
+		bool tryConcealedKong(int seat);
 		void settle(int winner, bool zimo, int fromSeat, int fan, int score, const std::string& desc);
 		void onSync(const NetMessage::Ptr& netMsg);
 		void sendHand(int seat);

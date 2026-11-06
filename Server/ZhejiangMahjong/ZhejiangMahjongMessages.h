@@ -220,6 +220,29 @@ namespace NiuMa
 		int tile;		// 碰的牌
 		int fromSeat;	// 被碰者
 	};
+	/** 杠牌广播 */
+	class MsgZhejiangMahjongGang : public MsgBase
+	{
+	public:
+		MsgZhejiangMahjongGang();
+		virtual ~MsgZhejiangMahjongGang() {}
+
+		static const std::string TYPE;
+
+		virtual const std::string& getType() const {
+			return TYPE;
+		}
+
+		MSG_PACK_IMPL
+
+		MSGPACK_DEFINE_MAP(seat, tile, fromSeat, concealed);
+
+	public:
+		int seat;		// 杠牌者
+		int tile;		// 杠的牌
+		int fromSeat;	// 被杠者（暗杠为 -1）
+		bool concealed;	// 是否暗杠
+	};
 	/** 结算 */
 	class MsgZhejiangMahjongGameOver : public MsgBase
 	{

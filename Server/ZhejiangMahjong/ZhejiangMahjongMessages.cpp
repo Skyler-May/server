@@ -58,6 +58,15 @@ namespace NiuMa
 		, success(false)
 	{}
 
+	const std::string MsgZhejiangMahjongGang::TYPE("MsgZhejiangMahjongGang");
+
+	MsgZhejiangMahjongGang::MsgZhejiangMahjongGang()
+		: seat(0)
+		, tile(0)
+		, fromSeat(-1)
+		, concealed(false)
+	{}
+
 	const std::string MsgZhejiangMahjongPong::TYPE("MsgZhejiangMahjongPong");
 
 	MsgZhejiangMahjongPong::MsgZhejiangMahjongPong()
@@ -94,6 +103,8 @@ namespace NiuMa
 		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongDiscard::TYPE, creator);
 		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongDiscardResp>());
 		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongDiscardResp::TYPE, creator);
+		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongGang>());
+		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongGang::TYPE, creator);
 		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongPong>());
 		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongPong::TYPE, creator);
 		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongGameOver>());
