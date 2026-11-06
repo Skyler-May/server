@@ -1,4 +1,4 @@
-﻿// NiuNiuRule.cpp
+// NiuNiuRule.cpp
 
 #include "NiuNiuRule.h"
 
@@ -159,7 +159,7 @@ namespace NiuMa
 				for (unsigned int i = 0; i < 4; i++) {
 					if (arrPoints[i] == 0)
 						continue;
-					for (unsigned int j = i + 1; j < 5; i++) {
+					for (unsigned int j = i + 1; j < 5; j++) {
 						if (arrPoints[j] == 0)
 							continue;
 						nSum = (arrPoints[i] + arrPoints[j]) % 10;

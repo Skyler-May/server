@@ -39,6 +39,9 @@
 #include "Landlord/LandlordMessages.h"
 #include "Landlord/LandlordRoomHandler.h"
 #include "Landlord/LandlordLoader.h"
+#include "NiuNiu/NiuNiuMessages.h"
+#include "NiuNiu/NiuNiuRoomHandler.h"
+#include "NiuNiu/NiuNiuLoader.h"
 #include "GuanDan/GuanDanCandidateOrder.h"
 #include "Game/DebtLiquidation.h"
 
@@ -336,6 +339,8 @@ int main(int argc, char* argv[]) {
         NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::GuanDanLoader>();
         loader = std::make_shared<NiuMa::LandlordLoader>();
+        loader = std::make_shared<NiuMa::NiuNiuLoader>();
+        NiuMa::VenueManager::getSingleton().registLoader(loader);
         NiuMa::VenueManager::getSingleton().registLoader(loader);
         NiuMa::VenueManager::getSingleton().registLoader(loader);
 
@@ -390,6 +395,10 @@ int main(int argc, char* argv[]) {
             handlers.push_back(handler);
             NiuMa::VenueManager::getSingleton().registHandler(handler);
             handler = std::make_shared<NiuMa::LandlordRoomHandler>();
+            handler = std::make_shared<NiuMa::NiuNiuRoomHandler>();
+            handler->registSelf();
+            handlers.push_back(handler);
+            NiuMa::VenueManager::getSingleton().registHandler(handler);
             handler->registSelf();
             handlers.push_back(handler);
             NiuMa::VenueManager::getSingleton().registHandler(handler);
@@ -409,6 +418,7 @@ int main(int argc, char* argv[]) {
         NiuMa::NiuNiu100Messages::registMessages();
         NiuMa::GuanDanMessages::registMessages();
         NiuMa::LandlordMessages::registMessages();
+        NiuMa::NiuNiuMessages::registMessages();
 
         // 初始化掼蛋游戏出牌组合候选顺序表
         NiuMa::GuanDanCandidateOrder::getSingleton();
