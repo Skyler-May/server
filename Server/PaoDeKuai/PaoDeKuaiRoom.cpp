@@ -6,6 +6,7 @@
 #include "PaoDeKuaiMessages.h"
 #include "../GameDefines.h"
 #include "../Common/SimpleRoundRecordTask.h"
+#include "../Common/SettleOutboxTask.h"
 #include "MySql/MysqlPool.h"
 
 #include "Base/BaseUtils.h"
@@ -502,6 +503,25 @@ namespace NiuMa
 			MysqlPool::getSingleton().asyncQuery(record);
 		}
 
+
+		// 结算出站（供聚合平台入账）
+		{
+			std::shared_ptr<SettleOutboxTask> outbox = std::make_shared<SettleOutboxTask>();
+			outbox->_venueId = getId();
+			outbox->_roundNo = _roundNo;
+			outbox->_gameType = static_cast<int>(GameType::PaoDeKuai);
+			for (int i = 0; i < getMaxPlayerNums() && i < 5; i++) {
+				GameAvatar::Ptr avatar = getAvatar(i);
+				if (!avatar || _lastDeltas[i] == 0)
+					continue;
+				SettleEntry entry;
+				entry.playerId = avatar->getPlayerId();
+				entry.delta = _lastDeltas[i];
+				outbox->_entries.push_back(entry);
+			}
+			if (!outbox->_entries.empty())
+				MysqlPool::getSingleton().asyncQuery(outbox);
+		}
 		InfoS << "跑得快房间(Id:" << getId() << ")结算，赢家座位:" << winner
 			<< "，地主" << (landlordWin ? "胜" : "负");
 	}

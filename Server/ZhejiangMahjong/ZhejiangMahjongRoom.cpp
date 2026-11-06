@@ -6,6 +6,7 @@
 #include "ZhejiangHuChecker.h"
 #include "../GameDefines.h"
 #include "ZhejiangMahjongRecordTask.h"
+#include "../Common/SettleOutboxTask.h"
 #include "MySql/MysqlPool.h"
 
 #include "Base/BaseUtils.h"
@@ -737,6 +738,25 @@ namespace NiuMa
 		saveRoundRecord(winner, zimo, fromSeat, fan, desc);
 
 		sendMessageToAll(msg);
+
+		// 结算出站（供聚合平台入账）
+		{
+			std::shared_ptr<SettleOutboxTask> outbox = std::make_shared<SettleOutboxTask>();
+			outbox->_venueId = getId();
+			outbox->_roundNo = _roundNo;
+			outbox->_gameType = static_cast<int>(GameType::ZhejiangMahjong);
+			for (int i = 0; i < getMaxPlayerNums() && i < 5; i++) {
+				GameAvatar::Ptr avatar = getAvatar(i);
+				if (!avatar || _lastDeltas[i] == 0)
+					continue;
+				SettleEntry entry;
+				entry.playerId = avatar->getPlayerId();
+				entry.delta = _lastDeltas[i];
+				outbox->_entries.push_back(entry);
+			}
+			if (!outbox->_entries.empty())
+				MysqlPool::getSingleton().asyncQuery(outbox);
+		}
 		InfoS << "浙江麻将(ID:" << getId() << ")结算，赢家座位:" << winner
 			<< (zimo ? "(自摸)" : "(点炮)") << "，番:" << fan << "，得分:" << score << "，牌型:" << desc;
 	}
