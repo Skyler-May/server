@@ -198,6 +198,28 @@ namespace NiuMa
 		std::string errMsg;
 	};
 
+	/** 碰牌广播 */
+	class MsgZhejiangMahjongPong : public MsgBase
+	{
+	public:
+		MsgZhejiangMahjongPong();
+		virtual ~MsgZhejiangMahjongPong() {}
+
+		static const std::string TYPE;
+
+		virtual const std::string& getType() const {
+			return TYPE;
+		}
+
+		MSG_PACK_IMPL
+
+		MSGPACK_DEFINE_MAP(seat, tile, fromSeat);
+
+	public:
+		int seat;		// 碰牌者
+		int tile;		// 碰的牌
+		int fromSeat;	// 被碰者
+	};
 	/** 结算 */
 	class MsgZhejiangMahjongGameOver : public MsgBase
 	{

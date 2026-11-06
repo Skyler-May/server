@@ -54,6 +54,9 @@ namespace NiuMa
 		bool checkHuFor(int seat, bool zimo, int fromSeat, int winTile, int& fan, int& score, std::string& desc);
 		// 出牌后检查其他家点炮
 		bool checkRobHu(int fromSeat);
+
+		// 出牌后检查其他家碰牌（自动碰）
+		bool checkPong(int fromSeat);
 		void settle(int winner, bool zimo, int fromSeat, int fan, int score, const std::string& desc);
 		void onSync(const NetMessage::Ptr& netMsg);
 		void sendHand(int seat);

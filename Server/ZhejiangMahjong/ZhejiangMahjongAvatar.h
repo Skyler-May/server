@@ -25,11 +25,17 @@ namespace NiuMa
 		bool removeTile(int tile);
 		void sortHand();
 
+		// 碰/杠牌组（每组记一张代表牌）
+		void addMeld(int tile);
+		const std::vector<int>& getMelds() const;
+		int getMeldCount() const;
+
 		// 清空
 		void clear();
 
 	private:
 		std::vector<int> _hand;
+		std::vector<int> _melds;
 	};
 }
 

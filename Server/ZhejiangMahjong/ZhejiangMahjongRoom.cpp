@@ -346,8 +346,11 @@ namespace NiuMa
 
 		sendHand(seat);
 
-		// 点炮检查
+		// 点炮检查（优先于碰）
 		if (checkRobHu(seat))
+			return true;
+		// 碰牌检查
+		if (checkPong(seat))
 			return true;
 		// 若已结算（点炮胡），不再继续
 		if (_gameState != GameState::Playing)
@@ -370,26 +373,29 @@ namespace NiuMa
 		for (size_t i = 0; i < hand.size(); i++)
 			cards.push_back(static_cast<BYTE>(hand[i]));
 
+		int meldCount = avatar->getMeldCount();
+		int expectHand = HAND_NUM - meldCount * 3;		// 未摸牌时的手牌数
+
 		ZhejiangHuResult result;
 		bool hu = false;
 		if (zimo) {
-			// 自摸：手牌已是 14 张，最后一张为刚摸到的牌
-			if (cards.size() < 14)
+			// 自摸：手牌为 expectHand+1 张，最后一张为刚摸到的牌
+			if (static_cast<int>(cards.size()) != expectHand + 1)
 				return false;
 			std::vector<BYTE> hand13(cards.begin(), cards.end() - 1);
-			hu = _checker->checkHu(hand13, cards.back(), true, result);
+			hu = _checker->checkHu(hand13, cards.back(), true, result, meldCount);
 			if (!hu)
-				hu = _checker->checkHu(cards, cards.back(), true, result);
+				hu = _checker->checkHu(cards, cards.back(), true, result, meldCount);
 		}
 		else {
-			// 点炮：手牌 13 张 + 别人打出的牌
-			if (cards.size() != HAND_NUM || winTile == 0)
+			// 点炮：手牌 expectHand 张 + 别人打出的牌
+			if (static_cast<int>(cards.size()) != expectHand || winTile == 0)
 				return false;
 			cards.push_back(static_cast<BYTE>(winTile));
 			std::vector<BYTE> hand13(cards.begin(), cards.end() - 1);
-			hu = _checker->checkHu(hand13, static_cast<BYTE>(winTile), false, result);
+			hu = _checker->checkHu(hand13, static_cast<BYTE>(winTile), false, result, meldCount);
 			if (!hu)
-				hu = _checker->checkHu(cards, static_cast<BYTE>(winTile), false, result);
+				hu = _checker->checkHu(cards, static_cast<BYTE>(winTile), false, result, meldCount);
 		}
 		if (!hu)
 			return false;
@@ -399,6 +405,48 @@ namespace NiuMa
 		return true;
 	}
 
+	bool ZhejiangMahjongRoom::checkPong(int fromSeat) {
+		if (_lastDiscardTile == 0)
+			return false;
+		for (int i = 1; i < getMaxPlayerNums(); i++) {
+			int seat = (fromSeat + i) % getMaxPlayerNums();
+			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+			if (avatar == nullptr)
+				continue;
+			// 手上有两张同样的牌才能碰
+			int same = 0;
+			const std::vector<int>& hand = avatar->getHand();
+			for (size_t k = 0; k < hand.size(); k++) {
+				if (hand[k] == _lastDiscardTile)
+					same++;
+			}
+			if (same < 2)
+				continue;
+			// 策略：只碰字牌和幺九牌（1/9），避免机器人乱碰把手牌拆散
+			int color = (_lastDiscardTile & 0xF0) >> 4;
+			int value = _lastDiscardTile & 0x0F;
+			bool worth = (color == 3) || (value == 1) || (value == 9);
+			if (!worth)
+				continue;
+			avatar->removeTile(_lastDiscardTile);
+			avatar->removeTile(_lastDiscardTile);
+			avatar->addMeld(_lastDiscardTile);
+
+			MsgZhejiangMahjongPong msg;
+			msg.seat = seat;
+			msg.tile = _lastDiscardTile;
+			msg.fromSeat = fromSeat;
+			sendMessageToAll(msg);
+			sendHand(seat);
+			InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 碰 0x"
+				<< std::hex << _lastDiscardTile << std::dec << "（来自座位" << fromSeat << "）";
+
+			// 碰后由该玩家出牌
+			waitDiscard(seat);
+			return true;
+		}
+		return false;
+	}
 	bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
 		if (_lastDiscardTile == 0)
 			return false;
@@ -406,7 +454,9 @@ namespace NiuMa
 		for (int i = 1; i < getMaxPlayerNums(); i++) {
 			int seat = (fromSeat + i) % getMaxPlayerNums();
 			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
-			if (avatar == nullptr || avatar->getHandNum() != HAND_NUM)
+			if (avatar == nullptr)
+				continue;
+			if (avatar->getHandNum() != HAND_NUM - avatar->getMeldCount() * 3)
 				continue;
 			int fan = 0, score = 0;
 			std::string desc;

@@ -46,7 +46,7 @@ namespace NiuMa
 		}
 	}
 
-	bool ZhejiangHuChecker::checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result) {
+	bool ZhejiangHuChecker::checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result, int meldCount) {
 		result.reset();
 		result.zimo = zimo;
 		if (cards.empty())
@@ -104,7 +104,9 @@ namespace NiuMa
 				cbCardIndex[idx] = 0;
 			}
 		}
-		bool neat3 = isNeat3WithJokers(cbCardIndex, jokers);
+		int setsNeeded = 4 - meldCount;
+		if (setsNeeded < 0) setsNeeded = 0;
+		bool neat3 = isNeat3WithJokers(cbCardIndex, jokers, setsNeeded);
 		bool neat2 = (cards.size() == 14) && _logic.IsNeat2(cbCardIndex);
 
 		bool hu = vendorHu || neat3 || neat2;
@@ -176,14 +178,15 @@ namespace NiuMa
 	}
 
 	bool ZhejiangHuChecker::isNeat3(const BYTE cbCardIndex[MAX_INDEX]) {
-		return isNeat3WithJokers(cbCardIndex, 0);
+		return isNeat3WithJokers(cbCardIndex, 0, 4);
 	}
 
-	bool ZhejiangHuChecker::isNeat3WithJokers(const BYTE cbCardIndex[MAX_INDEX], int jokers) {
+	bool ZhejiangHuChecker::isNeat3WithJokers(const BYTE cbCardIndex[MAX_INDEX], int jokers, int setsNeeded) {
 		int total = jokers;
 		for (int i = 0; i < CARD_KING_INDEX; i++)
 			total += cbCardIndex[i];
-		if (total == 0 || (total % 3) != 2)
+		// 手牌应为：setsNeeded 组面子(3n) + 1 对将牌(2)
+		if (total == 0 || total != setsNeeded * 3 + 2)
 			return false;
 
 		// 依次尝试将牌（对子），剩余拆组

@@ -52,8 +52,21 @@ namespace NiuMa
 		});
 	}
 
+	void ZhejiangMahjongAvatar::addMeld(int tile) {
+		_melds.push_back(tile);
+	}
+
+	const std::vector<int>& ZhejiangMahjongAvatar::getMelds() const {
+		return _melds;
+	}
+
+	int ZhejiangMahjongAvatar::getMeldCount() const {
+		return static_cast<int>(_melds.size());
+	}
+
 	void ZhejiangMahjongAvatar::clear() {
 		_hand.clear();
+		_melds.clear();
 		setReady(false);
 	}
 }

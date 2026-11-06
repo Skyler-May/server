@@ -57,7 +57,7 @@ namespace NiuMa
 		 * @param result 输出结果
 		 * @return 是否可胡
 		 */
-		bool checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result);
+		bool checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result, int meldCount = 0);
 
 		// 计算番型与得分（checkHu 成功后调用）
 		void calcFan(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX],
@@ -73,8 +73,8 @@ namespace NiuMa
 		// 自己实现的"3n+2"平胡判定（网狐 IsNeat3 的组合枚举有缺陷，这里重写）
 		static bool isNeat3(const BYTE cbCardIndex[MAX_INDEX]);
 
-		// 支持财神（万能牌）的平胡判定
-		static bool isNeat3WithJokers(const BYTE cbCardIndex[MAX_INDEX], int jokers);
+		// 支持财神（万能牌）的平胡判定；setsNeeded 为还需要拆出的面子数（4 - 已碰杠组数）
+		static bool isNeat3WithJokers(const BYTE cbCardIndex[MAX_INDEX], int jokers, int setsNeeded = 4);
 
 	private:
 		mutable CGameLogic _logic;
