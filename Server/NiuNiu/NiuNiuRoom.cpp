@@ -4,6 +4,8 @@
 #include "NiuNiuAvatar.h"
 #include "NiuNiuMessages.h"
 #include "../GameDefines.h"
+#include "../Common/SimpleRoundRecordTask.h"
+#include "MySql/MysqlPool.h"
 
 #include "Base/BaseUtils.h"
 #include "Base/Log.h"
@@ -271,6 +273,25 @@ namespace NiuMa
 			}
 		}
 		sendMessageToAll(msg);
+		for (int i = 0; i < getMaxPlayerNums() && i < 5; i++)
+			_lastDeltas[i] = msg.deltas[i];
+		// 战绩落库
+		{
+			std::shared_ptr<SimpleRoundRecordTask> record = std::make_shared<SimpleRoundRecordTask>();
+			record->_table = "game_niu_niu_record";
+			record->_venueId = getId();
+			record->_roundNo = ++_roundNo;
+			record->_winner = winner;
+			record->_desc = (winner < 0) ? "流局" : "牛牛";
+			for (int i = 0; i < getMaxPlayerNums() && i < 5; i++) {
+				GameAvatar::Ptr avatar = getAvatar(i);
+				if (avatar)
+					record->_playerIds[i] = avatar->getPlayerId();
+				record->_deltas[i] = _lastDeltas[i];
+			}
+			MysqlPool::getSingleton().asyncQuery(record);
+		}
+
 		InfoS << "牛牛牌桌(ID:" << getId() << ")结算，赢家座位:" << winner
 			<< "，庄家座位:" << _banker;
 	}

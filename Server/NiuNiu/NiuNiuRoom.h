@@ -42,6 +42,12 @@ namespace NiuMa
 		virtual bool beforeDestroy(bool silence) override;
 
 	private:
+
+		// 最近一局的分数变化（用于战绩落库）
+		int _lastDeltas[5];
+
+		// 本房间局号
+		int _roundNo = 0;
 		void beginDeal();
 		void beginCompare();
 		void settle(int winner);

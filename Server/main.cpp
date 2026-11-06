@@ -344,14 +344,14 @@ int main(int argc, char* argv[]) {
         loader = std::make_shared<NiuMa::NiuNiu100Loader>();
         NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::GuanDanLoader>();
+        NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::LandlordLoader>();
+        NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::NiuNiuLoader>();
+        NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::PaoDeKuaiLoader>();
+        NiuMa::VenueManager::getSingleton().registLoader(loader);
         loader = std::make_shared<NiuMa::ZhejiangMahjongLoader>();
-        NiuMa::VenueManager::getSingleton().registLoader(loader);
-        NiuMa::VenueManager::getSingleton().registLoader(loader);
-        NiuMa::VenueManager::getSingleton().registLoader(loader);
-        NiuMa::VenueManager::getSingleton().registLoader(loader);
         NiuMa::VenueManager::getSingleton().registLoader(loader);
 
         // 创建场地外消息处理器线程池
@@ -398,29 +398,38 @@ int main(int argc, char* argv[]) {
             handlers.push_back(handler);
             NiuMa::VenueManager::getSingleton().registHandler(handler);
         }
-        // 创建掼蛋游戏房间内部网络消息处理器
+        // 创建掼蛋/斗地主/牛牛/跑得快/浙江麻将房间内部网络消息处理器
         for (int i = 0; i < threadNum; i++) {
             handler = std::make_shared<NiuMa::GuanDanRoomHandler>();
             handler->registSelf();
             handlers.push_back(handler);
             NiuMa::VenueManager::getSingleton().registHandler(handler);
+        }
+        for (int i = 0; i < threadNum; i++) {
             handler = std::make_shared<NiuMa::LandlordRoomHandler>();
-            handler = std::make_shared<NiuMa::NiuNiuRoomHandler>();
-            handler = std::make_shared<NiuMa::PaoDeKuaiRoomHandler>();
-            handler = std::make_shared<NiuMa::ZhejiangMahjongRoomHandler>();
-            handler->registSelf();
-            handlers.push_back(handler);
-            NiuMa::VenueManager::getSingleton().registHandler(handler);
-            handler->registSelf();
-            handlers.push_back(handler);
-            NiuMa::VenueManager::getSingleton().registHandler(handler);
-            handler->registSelf();
-            handlers.push_back(handler);
-            NiuMa::VenueManager::getSingleton().registHandler(handler);
             handler->registSelf();
             handlers.push_back(handler);
             NiuMa::VenueManager::getSingleton().registHandler(handler);
         }
+        for (int i = 0; i < threadNum; i++) {
+            handler = std::make_shared<NiuMa::NiuNiuRoomHandler>();
+            handler->registSelf();
+            handlers.push_back(handler);
+            NiuMa::VenueManager::getSingleton().registHandler(handler);
+        }
+        for (int i = 0; i < threadNum; i++) {
+            handler = std::make_shared<NiuMa::PaoDeKuaiRoomHandler>();
+            handler->registSelf();
+            handlers.push_back(handler);
+            NiuMa::VenueManager::getSingleton().registHandler(handler);
+        }
+        for (int i = 0; i < threadNum; i++) {
+            handler = std::make_shared<NiuMa::ZhejiangMahjongRoomHandler>();
+            handler->registSelf();
+            handlers.push_back(handler);
+            NiuMa::VenueManager::getSingleton().registHandler(handler);
+        }
+
         // 创建场地内消息处理器线程池
         std::shared_ptr<NiuMa::MessageThreadPool> innerPool = std::make_shared<NiuMa::MessageThreadPool>();
         innerPool->start(threadNum, handlers);
