@@ -1,4 +1,4 @@
-﻿// main.cpp
+// main.cpp
 
 #include <iostream>
 #include <signal.h>
@@ -36,6 +36,7 @@
 #include "GuanDan/GuanDanRoomHandler.h"
 #include "GuanDan/GuanDanLoader.h"
 #include "GuanDan/GuanDanMessages.h"
+#include "Landlord/LandlordMessages.h"
 #include "GuanDan/GuanDanCandidateOrder.h"
 #include "Game/DebtLiquidation.h"
 
@@ -399,6 +400,7 @@ int main(int argc, char* argv[]) {
         NiuMa::LackeyMessages::registMessages();
         NiuMa::NiuNiu100Messages::registMessages();
         NiuMa::GuanDanMessages::registMessages();
+        NiuMa::LandlordMessages::registMessages();
 
         // 初始化掼蛋游戏出牌组合候选顺序表
         NiuMa::GuanDanCandidateOrder::getSingleton();

@@ -1,4 +1,4 @@
-﻿// GameDefines.h
+// GameDefines.h
 // Author wujian
 // Email 393817707@qq.com
 // Date 2024.12.03
@@ -20,7 +20,8 @@ namespace NiuMa
 		LiuAnBiJi = 1027,	// 六安比鸡
 		Lackey = 1028,		// 逮狗腿
 		Tractor = 1029,		// 拖拉机
-		GuanDan = 1030		// 掼蛋
+		GuanDan = 1030,		// 掼蛋
+		Landlord = 1031		// 斗地主（网狐规则移植）
 	};
 
 
