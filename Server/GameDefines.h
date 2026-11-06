@@ -21,7 +21,8 @@ namespace NiuMa
 		Lackey = 1028,		// 逮狗腿
 		Tractor = 1029,		// 拖拉机
 		GuanDan = 1030,		// 掼蛋
-		Landlord = 1031		// 斗地主（网狐规则移植）
+		Landlord = 1031,	// 斗地主（网狐规则移植）
+		PaoDeKuai = 1032	// 跑得快
 	};
 
 
