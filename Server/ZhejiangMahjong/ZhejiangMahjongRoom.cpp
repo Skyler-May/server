@@ -96,6 +96,12 @@ namespace NiuMa
 		_lastDiscardSeat = -1;
 		_current = 0;
 		_waitingDiscard = false;
+		// 关键：清空各家手牌与碰杠组，否则跨局会不断累积（曾导致单家 140 张）
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(i).get());
+			if (avatar)
+				avatar->clear();
+		}
 	}
 
 	bool ZhejiangMahjongRoom::beforeDestroy(bool silence) {
@@ -285,6 +291,9 @@ namespace NiuMa
 		msg.leftNum = static_cast<int>(_wall.size());
 		msg.send(avatar->getSession());
 
+		// 同步手牌（含刚摸到的牌），客户端据此出牌
+		sendHand(seat);
+
 		// 自摸检查
 		int fan = 0, score = 0;
 		std::string desc;
@@ -432,6 +441,10 @@ namespace NiuMa
 			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 			if (avatar == nullptr)
 				continue;
+			if (avatar->getMeldCount() >= 4)
+				continue;
+			if (avatar->getHandNum() != HAND_NUM - avatar->getMeldCount() * 3)
+				continue;
 			int same = 0;
 			const std::vector<int>& hand = avatar->getHand();
 			for (size_t k = 0; k < hand.size(); k++) {
@@ -455,6 +468,7 @@ namespace NiuMa
 				<< std::hex << _lastDiscardTile << std::dec << "（来自座位" << fromSeat << "）";
 
 			// 杠后补摸一张，再出牌
+			_lastDiscardTile = 0;
 			drawTile(seat);
 			return true;
 		}
@@ -468,7 +482,11 @@ namespace NiuMa
 		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 		if (avatar == nullptr)
 			return false;
+		if (avatar->getMeldCount() >= 4)
+			return false;
 		const std::vector<int>& hand = avatar->getHand();
+		if (static_cast<int>(hand.size()) != HAND_NUM - avatar->getMeldCount() * 3 + 1)
+			return false;
 		int target = 0;
 		for (size_t i = 0; i < hand.size(); i++) {
 			int c = 0;
@@ -506,6 +524,11 @@ namespace NiuMa
 			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 			if (avatar == nullptr)
 				continue;
+			// 最多 4 组，且手牌数必须与组数匹配
+			if (avatar->getMeldCount() >= 4)
+				continue;
+			if (avatar->getHandNum() != HAND_NUM - avatar->getMeldCount() * 3)
+				continue;
 			// 手上有两张同样的牌才能碰
 			int same = 0;
 			const std::vector<int>& hand = avatar->getHand();
@@ -535,6 +558,7 @@ namespace NiuMa
 				<< std::hex << _lastDiscardTile << std::dec << "（来自座位" << fromSeat << "）";
 
 			// 碰后由该玩家出牌
+			_lastDiscardTile = 0;
 			waitDiscard(seat);
 			return true;
 		}
@@ -563,13 +587,54 @@ namespace NiuMa
 		return false;
 	}
 
-	// 出牌决策：给每张牌打"有用度"分，打掉最没用的（孤张、幺九优先），财神永远不打
+	// 出牌决策：优先打"能听牌"的那张；否则按孤张优先打分
 	int ZhejiangMahjongRoom::pickDiscardTile(int seat) const {
 		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 		if (avatar == nullptr || avatar->getHandNum() == 0)
 			return 0;
 		const std::vector<int>& hand = avatar->getHand();
+		int meldCount = avatar->getMeldCount();
 
+		// 1) 先看打掉哪张能听牌（且打的这张不是财神）
+		{
+			int tingTile = 0;
+			size_t bestWait = 0;
+			std::vector<int> tried;
+			for (size_t i = 0; i < hand.size(); i++) {
+				int tile = hand[i];
+				if (tile == _kingCard)
+					continue;
+				bool dup = false;
+				for (size_t k = 0; k < tried.size(); k++) {
+					if (tried[k] == tile) { dup = true; break; }
+				}
+				if (dup)
+					continue;
+				tried.push_back(tile);
+
+				std::vector<BYTE> rest;
+				bool removed = false;
+				for (size_t k = 0; k < hand.size(); k++) {
+					if (!removed && hand[k] == tile) {
+						removed = true;
+						continue;
+					}
+					rest.push_back(static_cast<BYTE>(hand[k]));
+				}
+				if (static_cast<int>(rest.size()) != HAND_NUM - meldCount * 3)
+					continue;
+				std::vector<int> waiting;
+				_checker->checkTing(rest, meldCount, waiting);
+				if (!waiting.empty() && waiting.size() >= bestWait) {
+					bestWait = waiting.size();
+					tingTile = tile;
+				}
+			}
+			if (tingTile != 0)
+				return tingTile;
+		}
+
+		// 2) 没有能听牌的牌，按孤张优先打分
 		int bestTile = 0;
 		int bestScore = 1 << 20;
 		for (size_t i = 0; i < hand.size(); i++) {

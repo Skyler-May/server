@@ -59,6 +59,12 @@ namespace NiuMa
 		 */
 		bool checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result, int meldCount = 0);
 
+		// 判断一组牌（含将牌）是否能胡；meldCount 为已碰/杠组数
+		bool canHuTiles(const std::vector<BYTE>& cards, int meldCount) const;
+
+		// 听牌判定：返回所有能胡的牌（手牌张数应为 13-3*meldCount）
+		void checkTing(const std::vector<BYTE>& hand, int meldCount, std::vector<int>& waiting) const;
+
 		// 计算番型与得分（checkHu 成功后调用）
 		void calcFan(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX],
 			int jokers, bool zimo, ZhejiangHuResult& result);

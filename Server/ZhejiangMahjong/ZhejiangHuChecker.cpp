@@ -256,6 +256,55 @@ namespace NiuMa
 		}
 	}
 
+	// 通用判定：给定牌（含将牌）能否胡
+	bool ZhejiangHuChecker::canHuTiles(const std::vector<BYTE>& cards, int meldCount) const {
+		if (cards.empty())
+			return false;
+		BYTE idx[MAX_INDEX];
+		buildCardIndex(cards, idx);
+		int jokers = 0;
+		if (_kingCard != 0) {
+			int color = (_kingCard & 0xF0) >> 4;
+			int value = _kingCard & 0x0F;
+			int idxKing = -1;
+			if (color == 0) idxKing = value - 1;
+			else if (color == 1) idxKing = 9 + (value - 1);
+			else if (color == 2) idxKing = 18 + (value - 1);
+			else if (color == 3) idxKing = 27 + (value - 1);
+			if (idxKing >= 0 && idxKing < CARD_KING_INDEX) {
+				jokers = idx[idxKing];
+				idx[idxKing] = 0;
+			}
+		}
+		int setsNeeded = 4 - meldCount;
+		if (setsNeeded < 0)
+			setsNeeded = 0;
+		return isNeat3WithJokers(idx, jokers, setsNeeded);
+	}
+
+	// 听牌判定
+	void ZhejiangHuChecker::checkTing(const std::vector<BYTE>& hand, int meldCount, std::vector<int>& waiting) const {
+		waiting.clear();
+		// 遍历 34 种牌
+		for (int color = 0; color < 4; color++) {
+			int maxValue = (color == 3) ? 7 : 9;
+			for (int value = 1; value <= maxValue; value++) {
+				BYTE tile = static_cast<BYTE>((color << 4) | value);
+				// 手里已有 4 张则不可能再摸到
+				int inHand = 0;
+				for (size_t i = 0; i < hand.size(); i++) {
+					if (hand[i] == tile)
+						inHand++;
+				}
+				if (inHand >= 4)
+					continue;
+				std::vector<BYTE> tmp = hand;
+				tmp.push_back(tile);
+				if (canHuTiles(tmp, meldCount))
+					waiting.push_back(static_cast<int>(tile));
+			}
+		}
+	}
 	// 计算番型（在 checkHu 成功后调用）
 	void ZhejiangHuChecker::calcFan(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX],
 		int jokers, bool zimo, ZhejiangHuResult& result) {
