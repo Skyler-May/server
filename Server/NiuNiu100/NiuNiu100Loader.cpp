@@ -1,4 +1,4 @@
-﻿// NiuNiu100Loader.cpp
+// NiuNiu100Loader.cpp
 
 #include "Base/Log.h"
 #include "NiuNiu100Loader.h"
@@ -70,7 +70,9 @@ namespace NiuMa
 			ErrorS << "加载百人牛牛游戏(Id: " << id << ")失败";
 			return nullptr;
 		}
-		std::shared_ptr<NiuNiu100Room> room = std::make_shared<NiuNiu100Room>(_rule, id, task->_number, task->_bankerId, task->_deposit, false);
+		// 公开房（无庄家）视为演示桌，人数不足时由机器人补位
+		bool demo = (task->_isPublic == 1) || task->_bankerId.empty();
+		std::shared_ptr<NiuNiu100Room> room = std::make_shared<NiuNiu100Room>(_rule, id, task->_number, task->_bankerId, task->_deposit, demo);
 		return room;
 	}
 }

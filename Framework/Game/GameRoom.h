@@ -1,4 +1,4 @@
-﻿// GameRoom.h
+// GameRoom.h
 // Author: wujian
 // Email: 393817707@qq.com
 // Date: 2024.11.22
@@ -95,6 +95,25 @@ namespace NiuMa {
 		 * 人数是否已满
 		 */
 		bool isFull() const;
+
+		/**
+		 * 当前是否允许真人顶替机器人座位（只在两局之间允许，子类按游戏状态实现）
+		 */
+		virtual bool canReplaceRobot() const;
+
+		/**
+		 * 查找一个可被真人顶替的机器人座位
+		 * @return 座位号，返回-1表示没有可顶替的机器人座位
+		 */
+		int getReplaceableRobotSeat() const;
+
+		/**
+		 * 用真人顶替机器人座位（仅局间，真人优先入座）
+		 * @param playerId 真人玩家id
+		 * @param errMsg 错误消息
+		 * @return 是否成功
+		 */
+		bool replaceRobotSeat(const std::string& playerId, std::string& errMsg);
 
 		/**
 		 * 是否全部玩家已就绪

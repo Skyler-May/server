@@ -1,4 +1,4 @@
-﻿// GameRoom.cpp
+// GameRoom.cpp
 
 #include "Base/Log.h"
 #include "Base/BaseUtils.h"
@@ -206,6 +206,53 @@ namespace NiuMa
 		return true;
 	}
 
+	bool GameRoom::canReplaceRobot() const {
+		// 默认不允许，具体游戏房按自己的对局状态重写（只在两局之间允许顶替）
+		return false;
+	}
+
+	int GameRoom::getReplaceableRobotSeat() const {
+		if (!canReplaceRobot())
+			return -1;
+		if (RoomCategory::RoomCategoryA != _category)
+			return -1;
+		for (int i = 0; i < _maxPlayerNums; i++) {
+			const GameAvatar::Ptr& avatar = _avatarSeats[i];
+			if (avatar && avatar->isRobot())
+				return i;
+		}
+		return -1;
+	}
+
+	bool GameRoom::replaceRobotSeat(const std::string& playerId, std::string& errMsg) {
+		int seat = getReplaceableRobotSeat();
+		if (seat < 0) {
+			errMsg = "没有可顶替的机器人座位";
+			return false;
+		}
+		GameAvatar::Ptr robot = _avatarSeats[seat];
+		if (!robot)
+			return false;
+		std::string robotId = robot->getPlayerId();
+		// 机器人让位（机器人没有押金记录，离开不会涉及资产）
+		std::string leaveErr;
+		leaveImpl(robotId, leaveErr);
+		if (hasAvatar(robotId)) {
+			errMsg = "机器人离座失败";
+			ErrorS << "房间(Id:" << getId() << ")机器人(Id:" << robotId << ")离座失败: " << leaveErr;
+			return false;
+		}
+		// 真人入座
+		if (!checkEnter(playerId, errMsg))
+			return false;
+		if (!joinGame(seat, playerId, errMsg))
+			return false;
+		onAvatarJoined(seat, playerId);
+		notifyAddAvatar(seat, playerId);
+		InfoS << "房间(Id:" << getId() << ")真人(Id:" << playerId << ")顶替机器人(Id:" << robotId << ")座位:" << seat;
+		return true;
+	}
+
 	bool GameRoom::isAllReady() const {
 		bool ret = true;
 		std::unordered_map<std::string, GameAvatar::Ptr>::const_iterator it = _allAvatars.begin();
@@ -326,6 +373,9 @@ namespace NiuMa
 			// A类房且不允许观众存在，即进入房间就必须加入游戏，检查是否还有空位
 			seat = getEmptySeat();
 			if (seat == -1) {
+				// 真人优先：局间允许真人顶替机器人座位
+				if (getReplaceableRobotSeat() >= 0)
+					return replaceRobotSeat(playerId, errMsg);
 				errMsg = "游戏已满员";
 				return false;
 			}
@@ -500,15 +550,22 @@ namespace NiuMa
 		if (RoomCategory::RoomCategoryA == _category) {
 			// A类房，机器人进入房间就必须加入游戏，检查是否还有空位
 			seat = getEmptySeat();
-			if (seat == -1)
+			if (seat == -1) {
+				InfoS << "机器人(Id:" << playerId << ")无空位可用 房间:" << getId()
+					<< " 人数:" << getAvatarCount() << " 满员:" << (isFull() ? 1 : 0);
 				return false;
+			}
 		}
 		std::string errMsg;
-		if (!checkEnter(playerId, errMsg, true))
+		if (!checkEnter(playerId, errMsg, true)) {
+			InfoS << "机器人(Id:" << playerId << ")进房被拒(checkEnter) 房间:" << getId() << " 原因:" << errMsg;
 			return false;
+		}
 		// 加入游戏
-		if (!joinGame(seat, playerId, errMsg, true))
+		if (!joinGame(seat, playerId, errMsg, true)) {
+			InfoS << "机器人(Id:" << playerId << ")加入游戏失败(joinGame) 房间:" << getId() << " 原因:" << errMsg;
 			return false;
+		}
 		// 执行玩家加入后的上层逻辑
 		onAvatarJoined(seat, playerId);
 		// 通知玩家加入

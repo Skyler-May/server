@@ -1,4 +1,4 @@
-﻿// RobotManager.h
+// RobotManager.h
 // Author wujian
 // Email 393817707@qq.com
 // Date 2025.02.17
@@ -9,6 +9,8 @@
 #include "Base/Singleton.h"
 
 #include <string>
+#include <map>
+#include <mutex>
 
 namespace NiuMa
 {
@@ -34,6 +36,17 @@ namespace NiuMa
 		 * @param playerId 机器人玩家id
 		 */
 		void free(const std::string& playerId);
+
+		/**
+		 * 清理占用超时的机器人（防止异常情况下机器人被永久占用）
+		 * @param timeoutSeconds 超时秒数
+		 */
+		void cleanTimeout(int timeoutSeconds = 1800);
+
+	private:
+		// 机器人占用表：playerId -> 占用时间戳（秒）
+		std::map<std::string, long long> _occupied;
+		std::mutex _mutex;
 	};
 }
 

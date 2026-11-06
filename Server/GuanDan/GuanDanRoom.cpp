@@ -1,4 +1,4 @@
-﻿// GuanDanRoom.cpp
+// GuanDanRoom.cpp
 
 #include "Base/BaseUtils.h"
 #include "Base/Log.h"
@@ -95,9 +95,15 @@ namespace NiuMa
 			if ((_level != static_cast<int>(GuanDanRoomLevel::Practice)) &&
 				(_level != static_cast<int>(GuanDanRoomLevel::Friend)))
 				checkOffline(60000);
-			if (_level == static_cast<int>(GuanDanRoomLevel::Practice))
+			// 真人不足时补位机器人（好友房不补）
+			if (_level != static_cast<int>(GuanDanRoomLevel::Friend))
 				addRobot(nowTick);
 			return;
+		}
+		if (_gameState == GameState::Sitting) {
+			// 座位阶段也允许补位，避免真人一时凑不齐时房间空等（好友房不补）
+			if (_level != static_cast<int>(GuanDanRoomLevel::Friend))
+				addRobot(nowTick);
 		}
 		if (_disbanding) {
 			deltaTicks = nowTick - _beginDisbandTick;
@@ -158,6 +164,11 @@ namespace NiuMa
 			ret = false;
 
 		return ret;
+	}
+
+	bool GuanDanRoom::canReplaceRobot() const {
+		// 只在两局之间（座位/准备阶段）允许真人顶替机器人
+		return (_gameState == GameState::Sitting) || (_gameState == GameState::Waiting);
 	}
 
 	GameAvatar::Ptr GuanDanRoom::createAvatar(const std::string& playerId, int seat, bool robot) const {
@@ -413,6 +424,11 @@ namespace NiuMa
 		GameAvatar::Ptr avatar = getAvatar(0);
 		if (!avatar)
 			return;
+		if (_waitTick == 0LL) {
+			// 首次调用先记录时间基准，避免 (nowTick - 0) 溢出成负数
+			_waitTick = nowTick;
+			return;
+		}
 		int deltaTicks = getWaitElapsed(nowTick);
 		if (deltaTicks < 1000)
 			return;
@@ -425,10 +441,17 @@ namespace NiuMa
 		std::string playerId;
 		while (true) {
 			robotId = BaseUtils::randInt(0, count) + 1;
-			if (!PlayerManager::getSingleton().loadRobot(robotId, playerId))
+			if (!PlayerManager::getSingleton().loadRobot(robotId, playerId)) {
+				InfoS << "补位机器人失败：加载机器人(Id:" << robotId << ")失败";
 				return;
-			if (joinRobot(playerId))
+			}
+			if (joinRobot(playerId)) {
+				InfoS << "补位成功：机器人(Id:" << playerId << ")进入房间(Id:" << getId() << ")，当前人数:" << getAvatarCount();
+				// 补位后可能已经满员且全部准备，需要主动检查开局
+				checkStartGame();
 				return;
+			}
+			InfoS << "补位失败：机器人(Id:" << playerId << ")进入房间(Id:" << getId() << ")被拒绝";
 			loop++;
 			// 避免因数据错误造成死循环
 			if (loop > 3)
@@ -451,23 +474,31 @@ namespace NiuMa
 		msg.seat = avatar->getSeat();
 		sendMessageToAll(msg, BaseUtils::EMPTY_STRING, true);
 
-		if (isFull() && isAllReady()) {
-			// 所有人都已经准备好
-			bool test = false;
-			// 好友房需要等待房主点击开始游戏才从入座状态进入到游戏状态，并开始发牌
-			if (_gameState == GameState::Waiting)
-				test = true;
-			else if ((_gameState == GameState::Sitting) && (_level != static_cast<int>(GuanDanRoomLevel::Friend))) {
-				// 进入游戏状态并开始发牌
-				_gameState = GameState::Dealing;
-				// 通知客户端进入游戏状态，观众在收到消息后必须离开房间
-				notifySitting();
-				// 踢出全部观众
-				kickAllSpectators();
-				test = true;
-			}
-			if (test)
-				beginDeal();
+		checkStartGame();
+	}
+
+	void GuanDanRoom::checkStartGame() {
+		if (!(_gameState == GameState::Sitting || _gameState == GameState::Waiting))
+			return;
+		if (!(isFull() && isAllReady()))
+			return;
+		// 所有人都已经准备好
+		bool test = false;
+		// 好友房需要等待房主点击开始游戏才从入座状态进入到游戏状态，并开始发牌
+		if (_gameState == GameState::Waiting)
+			test = true;
+		else if ((_gameState == GameState::Sitting) && (_level != static_cast<int>(GuanDanRoomLevel::Friend))) {
+			// 进入游戏状态并开始发牌
+			_gameState = GameState::Dealing;
+			// 通知客户端进入游戏状态，观众在收到消息后必须离开房间
+			notifySitting();
+			// 踢出全部观众
+			kickAllSpectators();
+			test = true;
+		}
+		if (test) {
+			InfoS << "房间(Id:" << getId() << ")人已满且全部准备，开始发牌";
+			beginDeal();
 		}
 	}
 

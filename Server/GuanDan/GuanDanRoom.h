@@ -1,4 +1,4 @@
-﻿// GuanDanRoom.h
+// GuanDanRoom.h
 // Author wujian
 // Email 393817707@qq.com
 // Date 2025.06.05
@@ -76,6 +76,8 @@ namespace NiuMa
 		virtual void initialize() override;
 		virtual void onTimer() override;
 		virtual bool onMessage(const NetMessage::Ptr& netMsg) override;
+		// 真人顶替机器人只在两局之间允许（座位/准备阶段）
+		virtual bool canReplaceRobot() const override;
 
 	protected:
 		virtual GameAvatar::Ptr createAvatar(const std::string& playerId, int seat, bool robot) const override;
@@ -106,6 +108,9 @@ namespace NiuMa
 
 		// 练习房添加机器人
 		void addRobot(time_t nowTick);
+
+		// 检查是否满足开局条件（人满且全部准备），机器人补位后也要调用
+		void checkStartGame();
 
 		// 开始发牌
 		void beginDeal();

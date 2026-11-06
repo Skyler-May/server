@@ -1,4 +1,4 @@
-﻿// LackeyRoom.cpp
+// LackeyRoom.cpp
 
 #include "Base/BaseUtils.h"
 #include "Base/Log.h"
@@ -96,6 +96,9 @@ namespace NiuMa
 		if (_gameState == GameState::Waiting) {
 			if (_level != static_cast<int>(LackeyRoomLevel::Friend))
 				checkOffline(60000);
+			// 真人不足时补位机器人（好友房不补）
+			if (_level != static_cast<int>(LackeyRoomLevel::Friend))
+				addRobot(BaseUtils::getCurrentMillisecond());
 			return;
 		}
 		if (_disbanding) {
@@ -170,6 +173,54 @@ namespace NiuMa
 
 	GameAvatar::Ptr LackeyRoom::createAvatar(const std::string& playerId, int seat, bool robot) const {
 		return std::make_shared<LackeyAvatarEx>(_rule, playerId, seat, robot);
+	}
+
+	bool LackeyRoom::canReplaceRobot() const {
+		// 只在两局之间（等待开局）允许真人顶替机器人
+		return (_gameState == GameState::Waiting);
+	}
+
+	void LackeyRoom::addRobot(time_t nowTick) {
+		if (isFull())
+			return;
+		if (getAvatarCount() <= 0)
+			return;
+		if (_robotTick == 0) {
+			_robotTick = nowTick;
+			return;
+		}
+		if (nowTick - _robotTick < 1000)
+			return;
+		_robotTick = nowTick;
+		int count = PlayerManager::getSingleton().getRobotCount();
+		if (count <= 0)
+			return;
+		int loop = 0;
+		while (loop < 4) {
+			int robotId = BaseUtils::randInt(0, count) + 1;
+			std::string robotPlayerId;
+			if (!PlayerManager::getSingleton().loadRobot(robotId, robotPlayerId))
+				return;
+			if (joinRobot(robotPlayerId)) {
+				GameAvatar::Ptr avatar = getAvatar(robotPlayerId);
+				if (avatar)
+					avatar->setReady(true);
+				InfoS << "补位成功：机器人(Id:" << robotPlayerId << ")进入房间(Id:" << getId()
+					<< ")，当前人数:" << getAvatarCount();
+				checkStartGame();
+				return;
+			}
+			loop++;
+		}
+	}
+
+	void LackeyRoom::checkStartGame() {
+		if (_gameState != GameState::Waiting)
+			return;
+		if (isFull() && isAllReady()) {
+			InfoS << "房间(Id:" << getId() << ")人已满且全部准备，开始发牌";
+			beginDeal();
+		}
 	}
 
 	bool LackeyRoom::checkEnter(const std::string& playerId, std::string& errMsg, bool robot) const {

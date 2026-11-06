@@ -1,4 +1,4 @@
-﻿// LackeyRoom.h
+// LackeyRoom.h
 // Author wujian
 // Email 393817707@qq.com
 // Date 2024.12.31
@@ -64,6 +64,8 @@ namespace NiuMa
 		virtual void initialize() override;
 		virtual void onTimer() override;
 		virtual bool onMessage(const NetMessage::Ptr& netMsg) override;
+		// 真人顶替机器人只在两局之间允许
+		virtual bool canReplaceRobot() const override;
 
 	protected:
 		virtual GameAvatar::Ptr createAvatar(const std::string& playerId, int seat, bool robot) const override;
@@ -81,6 +83,12 @@ namespace NiuMa
 	private:
 		// 返回当前房间所属的区域id
 		int getDistrictId() const;
+
+		// 真人不足时补位机器人
+		void addRobot(time_t nowTick);
+
+		// 人满且全部准备则开局
+		void checkStartGame();
 
 		// 返回等待操作已过了多久
 		int getWaitElapsed() const;
@@ -414,6 +422,9 @@ namespace NiuMa
 
 		// 上一次刷新区域内场地注册表的时间
 		time_t _lastRegisterTick;
+
+		// 上一次补位机器人的时间
+		time_t _robotTick = 0;
 
 		// 开始等待操作的时间(超时执行默认操作)，单位毫秒
 		time_t _waitTick;
