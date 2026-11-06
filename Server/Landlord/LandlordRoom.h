@@ -71,6 +71,9 @@ namespace NiuMa
 		// 给指定座位补位机器人
 		void addRobot(time_t nowTick);
 
+		// 刷新各替身的 session（以玩家当前连接为准）
+		void refreshSessions();
+
 		// 给某个玩家发送自己的手牌
 		void sendHandCard(LandlordAvatar* avatar);
 

@@ -248,6 +248,7 @@ namespace NiuMa
 	}
 
 	void LandlordRoom::notifyTurn(int seat) {
+		refreshSessions();
 		MsgLandlordTurn msg;
 		msg.seat = seat;
 		msg.mustPlay = _mustPlay;
@@ -261,11 +262,25 @@ namespace NiuMa
 			_stateTick = _stateTick - PLAY_TIMEOUT + 800;
 	}
 
+	void LandlordRoom::refreshSessions() {
+		// 防御：发牌/轮转时以玩家当前 session 为准，避免使用旧连接的 session
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			GameAvatar::Ptr avatar = getAvatar(i);
+			if (!avatar)
+				continue;
+			Player::Ptr player = PlayerManager::getSingleton().getPlayer(avatar->getPlayerId());
+			if (player)
+				avatar->setSession(player->getSession());
+		}
+	}
+
 	void LandlordRoom::sendHandCard(LandlordAvatar* avatar) {
 		if (avatar == nullptr)
 			return;
 		MsgLandlordHandCard msg;
 		msg.cards = avatar->getCards();
+		InfoS << "斗地主发手牌：座位" << avatar->getSeat() << " 玩家" << avatar->getPlayerId()
+			<< " 张数" << avatar->getCardNums() << " session=" << (avatar->getSession() ? "ok" : "null");
 		msg.send(avatar->getSession());
 	}
 
