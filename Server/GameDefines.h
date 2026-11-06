@@ -22,7 +22,8 @@ namespace NiuMa
 		Tractor = 1029,		// 拖拉机
 		GuanDan = 1030,		// 掼蛋
 		Landlord = 1031,	// 斗地主（网狐规则移植）
-		PaoDeKuai = 1032	// 跑得快
+		PaoDeKuai = 1032,	// 跑得快
+		ZhejiangMahjong = 1033	// 浙江麻将
 	};
 
 
