@@ -54,6 +54,18 @@ namespace NiuMa
 
 		BYTE cbCardIndex[MAX_INDEX];
 		buildCardIndex(cards, cbCardIndex);
+		// 13 张手牌 + 摸到/打出的当前牌：把当前牌计入索引
+		if ((cards.size() % 3) == 1 && currentCard != 0) {
+			int color = (currentCard & 0xF0) >> 4;
+			int value = currentCard & 0x0F;
+			int idx = -1;
+			if (color == 0) idx = value - 1;
+			else if (color == 1) idx = 9 + (value - 1);
+			else if (color == 2) idx = 18 + (value - 1);
+			else if (color == 3) idx = 27 + (value - 1);
+			if (idx >= 0 && idx < CARD_KING_INDEX)
+				cbCardIndex[idx]++;
+		}
 
 		tagWeaveItem weaveItem[4];
 		for (int i = 0; i < 4; i++) {
@@ -74,10 +86,41 @@ namespace NiuMa
 
 		tagHuCourt court;
 		court.Reset();
-		bool hu = _logic.GetHuInfo(&input, court);
+		bool vendorHu = _logic.GetHuInfo(&input, court);
+
+		// 网狐的 IsNeat3（平胡）组合枚举有缺陷，这里用自己实现的判定补齐
+		// 财神（_kingCard）作为万能牌：统计手上的财神张数后从索引中剔除
+		int jokers = 0;
+		if (_kingCard != 0) {
+			int color = (_kingCard & 0xF0) >> 4;
+			int value = _kingCard & 0x0F;
+			int idx = -1;
+			if (color == 0) idx = value - 1;
+			else if (color == 1) idx = 9 + (value - 1);
+			else if (color == 2) idx = 18 + (value - 1);
+			else if (color == 3) idx = 27 + (value - 1);
+			if (idx >= 0 && idx < CARD_KING_INDEX) {
+				jokers = cbCardIndex[idx];
+				cbCardIndex[idx] = 0;
+			}
+		}
+		bool neat3 = isNeat3WithJokers(cbCardIndex, jokers);
+		bool neat2 = (cards.size() == 14) && _logic.IsNeat2(cbCardIndex);
+
+		bool hu = vendorHu || neat3 || neat2;
 		result.hu = hu;
 		if (!hu)
 			return false;
+		if (neat3 && !vendorHu) {
+			result.desc = "平胡";
+			result.baseScore = 1;
+			return true;
+		}
+		if (neat2 && !vendorHu) {
+			result.desc = "七小对";
+			result.baseScore = 2;
+			return true;
+		}
 
 		result.zimo = court.IsZimo();
 		// 简化番数：有财神按财神个数，无财神额外加分（具体分值由房间层再算）
@@ -92,6 +135,80 @@ namespace NiuMa
 		return true;
 	}
 
+
+	// ---- 自己实现的平胡判定（3n+2，支持财神当万能牌）----
+	namespace {
+		// 剩余牌能否全部拆成刻子/顺子（jokers 为可任意替代的财神张数）
+		bool canFormSets(BYTE idx[MAX_INDEX], int jokers, int from) {
+			int i = from;
+			while (i < CARD_KING_INDEX && idx[i] == 0)
+				i++;
+			if (i >= CARD_KING_INDEX)
+				return (jokers % 3) == 0;
+
+			// 刻子：用 k 张真牌 + (3-k) 张财神
+			int useReal = idx[i] >= 3 ? 3 : idx[i];
+			for (int k = useReal; k >= 0; k--) {
+				int need = 3 - k;
+				if (need > jokers)
+					continue;
+				idx[i] -= k;
+				bool ok = canFormSets(idx, jokers - need, i);
+				idx[i] += k;
+				if (ok)
+					return true;
+			}
+
+			// 顺子：i, i+1, i+2，缺的用财神补（字牌不能成顺）
+			bool isWind = (i >= 27);
+			if (!isWind && (i % 9) <= 6) {
+				int need = 0;
+				int use[3];
+				for (int d = 0; d < 3; d++) {
+					use[d] = idx[i + d] > 0 ? 1 : 0;
+					need += (use[d] ? 0 : 1);
+				}
+				if (need <= jokers) {
+					for (int d = 0; d < 3; d++)
+						idx[i + d] -= use[d];
+					bool ok = canFormSets(idx, jokers - need, i);
+					for (int d = 0; d < 3; d++)
+						idx[i + d] += use[d];
+					if (ok)
+						return true;
+				}
+			}
+			return false;
+		}
+	}
+
+	bool ZhejiangHuChecker::isNeat3(const BYTE cbCardIndex[MAX_INDEX]) {
+		return isNeat3WithJokers(cbCardIndex, 0);
+	}
+
+	bool ZhejiangHuChecker::isNeat3WithJokers(const BYTE cbCardIndex[MAX_INDEX], int jokers) {
+		int total = jokers;
+		for (int i = 0; i < CARD_KING_INDEX; i++)
+			total += cbCardIndex[i];
+		if (total == 0 || (total % 3) != 2)
+			return false;
+
+		// 依次尝试将牌（对子），剩余拆组
+		for (int i = 0; i < CARD_KING_INDEX; i++) {
+			for (int useReal = (cbCardIndex[i] >= 2 ? 2 : cbCardIndex[i]); useReal >= 0; useReal--) {
+				int need = 2 - useReal;
+				if (need > jokers)
+					continue;
+				BYTE work[MAX_INDEX];
+				for (int k = 0; k < MAX_INDEX; k++)
+					work[k] = cbCardIndex[k];
+				work[i] -= useReal;
+				if (canFormSets(work, jokers - need, 0))
+					return true;
+			}
+		}
+		return false;
+	}
 	std::string ZhejiangHuChecker::cardToText(BYTE card) {
 		const char* names[] = { "万", "条", "筒", "字" };
 		int color = (card & 0xF0) >> 4;

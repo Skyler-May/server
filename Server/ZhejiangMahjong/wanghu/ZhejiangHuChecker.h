@@ -60,6 +60,12 @@ namespace NiuMa
 		// 把手牌转换为网狐的牌索引数组（每种牌的张数）
 		static void buildCardIndex(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX]);
 
+		// 自己实现的"3n+2"平胡判定（网狐 IsNeat3 的组合枚举有缺陷，这里重写）
+		static bool isNeat3(const BYTE cbCardIndex[MAX_INDEX]);
+
+		// 支持财神（万能牌）的平胡判定
+		static bool isNeat3WithJokers(const BYTE cbCardIndex[MAX_INDEX], int jokers);
+
 	private:
 		mutable CGameLogic _logic;
 		BYTE _kingCard;
