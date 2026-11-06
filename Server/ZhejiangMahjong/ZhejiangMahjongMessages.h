@@ -104,10 +104,13 @@ namespace NiuMa
 
 		MSG_PACK_IMPL
 
-		MSGPACK_DEFINE_MAP(hand);
+		MSGPACK_DEFINE_MAP(hand, waiting);
 
 	public:
 		std::vector<int> hand;
+
+		// 听牌（能胡的牌）
+		std::vector<int> waiting;
 	};
 
 	/** 摸牌通知（只发给摸牌的人） */
@@ -196,6 +199,51 @@ namespace NiuMa
 		int tile;
 		bool success;
 		std::string errMsg;
+	};
+
+
+	/** 询问玩家操作（碰/杠/胡/过） */
+	class MsgZhejiangMahjongAction : public MsgBase
+	{
+	public:
+		MsgZhejiangMahjongAction();
+		virtual ~MsgZhejiangMahjongAction() {}
+
+		static const std::string TYPE;
+
+		virtual const std::string& getType() const {
+			return TYPE;
+		}
+
+		MSG_PACK_IMPL
+
+		MSGPACK_DEFINE_MAP(seat, tile, fromSeat, options, second);
+
+	public:
+		int seat;		// 被询问的座位
+		int tile;		// 打出的牌
+		int fromSeat;	// 打牌者
+		int options;	// 位掩码：1=碰 2=杠 4=胡
+		int second;		// 剩余秒数
+	};
+
+	/** 玩家操作应答 */
+	class MsgZhejiangMahjongActionResp : public MsgVenueInner
+	{
+	public:
+		MsgZhejiangMahjongActionResp();
+		virtual ~MsgZhejiangMahjongActionResp() {}
+
+		static const std::string TYPE;
+
+		virtual const std::string& getType() const {
+			return TYPE;
+		}
+
+		MSGPACK_DEFINE_MAP(playerId, timestamp, nonce, signature, venueId, choice);
+
+	public:
+		int choice;		// 0=过 1=碰 2=杠 4=胡
 	};
 
 	/** 碰牌广播 */

@@ -23,6 +23,7 @@ namespace NiuMa
 		const int DEAL_DELAY = 2000;		// 发牌
 		const int DISCARD_TIMEOUT = 20000;	// 出牌超时
 		const int SETTLE_DELAY = 6000;		// 结算后等待
+		const int ACTION_TIMEOUT = 5000;	// 碰杠询问超时（毫秒）
 		const int MAX_SEATS = 4;
 		const int HAND_NUM = 13;
 
@@ -138,6 +139,10 @@ namespace NiuMa
 		time_t nowTick = BaseUtils::getCurrentMillisecond();
 		int deltaTicks = static_cast<int>(nowTick - _stateTick);
 
+		// 碰杠询问超时：按已收到的应答裁决
+		if (_actionDeadline > 0 && nowTick >= _actionDeadline)
+			resolveActions();
+
 		switch (_gameState) {
 			case GameState::Waiting: {
 				addRobot(nowTick);
@@ -179,6 +184,10 @@ namespace NiuMa
 		const std::string& msgType = netMsg->getType();
 		if (msgType == MsgZhejiangMahjongSync::TYPE) {
 			onSync(netMsg);
+			return true;
+		}
+		if (msgType == MsgZhejiangMahjongActionResp::TYPE) {
+			onActionResp(netMsg);
 			return true;
 		}
 		if (msgType == MsgZhejiangMahjongDiscard::TYPE) {
@@ -377,11 +386,8 @@ namespace NiuMa
 		// 点炮检查（优先于碰）
 		if (checkRobHu(seat))
 			return true;
-		// 杠优先于碰
-		if (checkGang(seat))
-			return true;
-		// 碰牌检查
-		if (checkPong(seat))
+		// 询问其他家是否碰/杠（带超时裁决）
+		if (beginActionCheck(seat))
 			return true;
 		// 若已结算（点炮胡），不再继续
 		if (_gameState != GameState::Playing)
@@ -437,49 +443,7 @@ namespace NiuMa
 	}
 
 	// 明杠：其他家有 3 张同牌
-	bool ZhejiangMahjongRoom::checkGang(int fromSeat) {
-		if (_lastDiscardTile == 0)
-			return false;
-		for (int i = 1; i < getMaxPlayerNums(); i++) {
-			int seat = (fromSeat + i) % getMaxPlayerNums();
-			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
-			if (avatar == nullptr)
-				continue;
-			if (avatar->getMeldCount() >= 4)
-				continue;
-			if (avatar->getHandNum() != HAND_NUM - avatar->getMeldCount() * 3)
-				continue;
-			int same = 0;
-			const std::vector<int>& hand = avatar->getHand();
-			for (size_t k = 0; k < hand.size(); k++) {
-				if (hand[k] == _lastDiscardTile)
-					same++;
-			}
-			if (same < 3)
-				continue;
-			for (int n = 0; n < 3; n++)
-				avatar->removeTile(_lastDiscardTile);
-			avatar->addMeld(_lastDiscardTile);
-
-			MsgZhejiangMahjongGang msg;
-			msg.seat = seat;
-			msg.tile = _lastDiscardTile;
-			msg.fromSeat = fromSeat;
-			msg.concealed = false;
-			sendMessageToAll(msg);
-			sendHand(seat);
-			InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 明杠 0x"
-				<< std::hex << _lastDiscardTile << std::dec << "（来自座位" << fromSeat << "）";
-
-			// 杠后补摸一张，再出牌
-			_lastDiscardTile = 0;
-			drawTile(seat);
-			return true;
-		}
-		return false;
-	}
-
-	// 暗杠：自己摸牌后手上有 4 张同牌
+// 暗杠：自己摸牌后手上有 4 张同牌
 	bool ZhejiangMahjongRoom::tryConcealedKong(int seat) {
 		if (_gameState != GameState::Playing)
 			return false;
@@ -520,55 +484,7 @@ namespace NiuMa
 			<< std::hex << target << std::dec;
 		return true;
 	}
-	bool ZhejiangMahjongRoom::checkPong(int fromSeat) {
-		if (_lastDiscardTile == 0)
-			return false;
-		for (int i = 1; i < getMaxPlayerNums(); i++) {
-			int seat = (fromSeat + i) % getMaxPlayerNums();
-			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
-			if (avatar == nullptr)
-				continue;
-			// 最多 4 组，且手牌数必须与组数匹配
-			if (avatar->getMeldCount() >= 4)
-				continue;
-			if (avatar->getHandNum() != HAND_NUM - avatar->getMeldCount() * 3)
-				continue;
-			// 手上有两张同样的牌才能碰
-			int same = 0;
-			const std::vector<int>& hand = avatar->getHand();
-			for (size_t k = 0; k < hand.size(); k++) {
-				if (hand[k] == _lastDiscardTile)
-					same++;
-			}
-			if (same < 2)
-				continue;
-			// 策略：只碰字牌和幺九牌（1/9），避免机器人乱碰把手牌拆散
-			int color = (_lastDiscardTile & 0xF0) >> 4;
-			int value = _lastDiscardTile & 0x0F;
-			bool worth = (color == 3) || (value == 1) || (value == 9);
-			if (!worth)
-				continue;
-			avatar->removeTile(_lastDiscardTile);
-			avatar->removeTile(_lastDiscardTile);
-			avatar->addMeld(_lastDiscardTile);
-
-			MsgZhejiangMahjongPong msg;
-			msg.seat = seat;
-			msg.tile = _lastDiscardTile;
-			msg.fromSeat = fromSeat;
-			sendMessageToAll(msg);
-			sendHand(seat);
-			InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 碰 0x"
-				<< std::hex << _lastDiscardTile << std::dec << "（来自座位" << fromSeat << "）";
-
-			// 碰后由该玩家出牌
-			_lastDiscardTile = 0;
-			waitDiscard(seat);
-			return true;
-		}
-		return false;
-	}
-	bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
+bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
 		if (_lastDiscardTile == 0)
 			return false;
 		// 按出牌顺序逆时针遍历其他三家
@@ -814,6 +730,14 @@ namespace NiuMa
 			return;
 		MsgZhejiangMahjongHandCard msg;
 		msg.hand = avatar->getHand();
+		// 听牌提示：13-3*meldCount 张手牌时计算能胡的牌
+		int meldCount = avatar->getMeldCount();
+		if (static_cast<int>(msg.hand.size()) == HAND_NUM - meldCount * 3) {
+			std::vector<BYTE> rest;
+			for (size_t k = 0; k < msg.hand.size(); k++)
+				rest.push_back(static_cast<BYTE>(msg.hand[k]));
+			_checker->checkTing(rest, meldCount, msg.waiting);
+		}
 		msg.send(avatar->getSession());
 	}
 
@@ -848,4 +772,185 @@ namespace NiuMa
 			}
 		}
 	}
+
+	// ---------------- 碰杠询问与裁决 ----------------
+	bool ZhejiangMahjongRoom::beginActionCheck(int fromSeat) {
+		if (_lastDiscardTile == 0)
+			return false;
+		int tile = _lastDiscardTile;
+		int color = (tile & 0xF0) >> 4;
+		int value = tile & 0x0F;
+		bool worthPong = (color == 3) || (value == 1) || (value == 9);	// 只碰字牌/幺九
+
+		bool any = false;
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			_actionOptions[i] = 0;
+			_actionChosen[i] = -1;
+			if (i == fromSeat)
+				continue;
+			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(i).get());
+			if (avatar == nullptr || avatar->getMeldCount() >= 4)
+				continue;
+			if (avatar->getHandNum() != HAND_NUM - avatar->getMeldCount() * 3)
+				continue;
+			int same = 0;
+			const std::vector<int>& hand = avatar->getHand();
+			for (size_t k = 0; k < hand.size(); k++) {
+				if (hand[k] == tile)
+					same++;
+			}
+			int mask = 0;
+			if (same >= 3)
+				mask |= 2;
+			if (same >= 2)
+				mask |= 1;
+			// 机器人按策略过滤（不值得碰的牌不提）；真人一律询问，由玩家自己决定
+			if ((mask & 1) && !worthPong && !(mask & 2) && avatar->isRobot())
+				mask &= ~1;
+			_actionOptions[i] = mask;
+			any = true;
+		}
+		if (!any)
+			return false;
+
+		_actionTile = tile;
+		_actionFromSeat = fromSeat;
+		_actionDeadline = BaseUtils::getCurrentMillisecond() + ACTION_TIMEOUT;
+		refreshSessions();
+
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			if (_actionOptions[i] == 0)
+				continue;
+			GameAvatar::Ptr avatar = getAvatar(i);
+			if (!avatar)
+				continue;
+			if (avatar->isRobot()) {
+				_actionChosen[i] = (_actionOptions[i] & 2) ? 2 : 1;
+				continue;
+			}
+			MsgZhejiangMahjongAction msg;
+			msg.seat = i;
+			msg.tile = tile;
+			msg.fromSeat = fromSeat;
+			msg.options = _actionOptions[i];
+			msg.second = ACTION_TIMEOUT / 1000;
+			msg.send(avatar->getSession());
+		}
+		InfoS << "浙江麻将(ID:" << getId() << ")询问碰杠 牌0x" << std::hex << tile << std::dec
+			<< " 来自座位" << fromSeat;
+
+		bool allAnswered = true;
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			if (_actionOptions[i] != 0 && _actionChosen[i] < 0) { allAnswered = false; break; }
+		}
+		if (allAnswered)
+			resolveActions();
+		return true;
+	}
+
+	void ZhejiangMahjongRoom::resolveActions() {
+		if (_actionDeadline == 0)
+			return;
+		_actionDeadline = 0;
+		int tile = _actionTile;
+		int fromSeat = _actionFromSeat;
+
+		int bestSeat = -1;
+		int bestChoice = 0;
+		for (int i = 1; i < getMaxPlayerNums(); i++) {
+			int seat = (fromSeat + i) % getMaxPlayerNums();
+			int chosen = _actionChosen[seat];
+			if (chosen <= 0)
+				continue;
+			if (chosen > bestChoice) {
+				bestChoice = chosen;
+				bestSeat = seat;
+			}
+		}
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			_actionOptions[i] = 0;
+			_actionChosen[i] = -1;
+		}
+		_actionTile = 0;
+		_actionFromSeat = -1;
+
+		if (bestSeat >= 0 && bestChoice == 2) {
+			applyGang(bestSeat, tile, fromSeat);
+			return;
+		}
+		if (bestSeat >= 0 && bestChoice == 1) {
+			applyPong(bestSeat, tile, fromSeat);
+			return;
+		}
+		if (_gameState != GameState::Playing)
+			return;
+		drawTile(nextSeat(fromSeat));
+	}
+
+	void ZhejiangMahjongRoom::onActionResp(const NetMessage::Ptr& netMsg) {
+		MsgZhejiangMahjongActionResp* inst = dynamic_cast<MsgZhejiangMahjongActionResp*>(netMsg->getMessage().get());
+		if (inst == nullptr)
+			return;
+		GameAvatar::Ptr avatar = getAvatar(inst->getPlayerId());
+		if (!avatar)
+			return;
+		int seat = avatar->getSeat();
+		if (seat < 0 || seat >= getMaxPlayerNums())
+			return;
+		if (_actionOptions[seat] == 0 || _actionChosen[seat] >= 0)
+			return;
+		int choice = inst->choice;
+		if (choice != 0 && (choice & _actionOptions[seat]) == 0)
+			choice = 0;
+		_actionChosen[seat] = choice;
+
+		bool allAnswered = true;
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			if (_actionOptions[i] != 0 && _actionChosen[i] < 0) { allAnswered = false; break; }
+		}
+		if (allAnswered)
+			resolveActions();
+	}
+
+	void ZhejiangMahjongRoom::applyPong(int seat, int tile, int fromSeat) {
+		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+		if (avatar == nullptr)
+			return;
+		if (!avatar->removeTile(tile) || !avatar->removeTile(tile))
+			return;
+		avatar->addMeld(tile);
+
+		MsgZhejiangMahjongPong msg;
+		msg.seat = seat;
+		msg.tile = tile;
+		msg.fromSeat = fromSeat;
+		sendMessageToAll(msg);
+		sendHand(seat);
+		InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 碰 0x" << std::hex << tile << std::dec
+			<< "（来自座位" << fromSeat << "）";
+		_lastDiscardTile = 0;
+		waitDiscard(seat);
+	}
+
+	void ZhejiangMahjongRoom::applyGang(int seat, int tile, int fromSeat) {
+		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+		if (avatar == nullptr)
+			return;
+		for (int n = 0; n < 3; n++)
+			avatar->removeTile(tile);
+		avatar->addMeld(tile);
+
+		MsgZhejiangMahjongGang msg;
+		msg.seat = seat;
+		msg.tile = tile;
+		msg.fromSeat = fromSeat;
+		msg.concealed = false;
+		sendMessageToAll(msg);
+		sendHand(seat);
+		InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 明杠 0x" << std::hex << tile << std::dec
+			<< "（来自座位" << fromSeat << "）";
+		_lastDiscardTile = 0;
+		drawTile(seat);
+	}
+
 }

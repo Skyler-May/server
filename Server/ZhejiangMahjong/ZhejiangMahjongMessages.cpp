@@ -67,6 +67,22 @@ namespace NiuMa
 		, concealed(false)
 	{}
 
+	const std::string MsgZhejiangMahjongAction::TYPE("MsgZhejiangMahjongAction");
+
+	MsgZhejiangMahjongAction::MsgZhejiangMahjongAction()
+		: seat(0)
+		, tile(0)
+		, fromSeat(-1)
+		, options(0)
+		, second(0)
+	{}
+
+	const std::string MsgZhejiangMahjongActionResp::TYPE("MsgZhejiangMahjongActionResp");
+
+	MsgZhejiangMahjongActionResp::MsgZhejiangMahjongActionResp()
+		: choice(0)
+	{}
+
 	const std::string MsgZhejiangMahjongPong::TYPE("MsgZhejiangMahjongPong");
 
 	MsgZhejiangMahjongPong::MsgZhejiangMahjongPong()
@@ -105,6 +121,10 @@ namespace NiuMa
 		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongDiscardResp::TYPE, creator);
 		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongGang>());
 		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongGang::TYPE, creator);
+		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongAction>());
+		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongAction::TYPE, creator);
+		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongActionResp>());
+		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongActionResp::TYPE, creator);
 		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongPong>());
 		MessageManager::getSingleton().registCreator(MsgZhejiangMahjongPong::TYPE, creator);
 		creator = IMsgCreator::Ptr(new MsgCreator<MsgZhejiangMahjongGameOver>());

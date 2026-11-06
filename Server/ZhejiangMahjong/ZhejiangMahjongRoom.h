@@ -58,8 +58,18 @@ namespace NiuMa
 		// 出牌后检查其他家点炮
 		bool checkRobHu(int fromSeat);
 
-		// 出牌后检查其他家碰牌（自动碰）
-		bool checkPong(int fromSeat);
+		// 出牌后询问其他家是否碰/杠（带超时与优先级裁决）
+		bool beginActionCheck(int fromSeat);
+
+		// 执行碰 / 明杠
+		void applyPong(int seat, int tile, int fromSeat);
+		void applyGang(int seat, int tile, int fromSeat);
+
+		// 裁决所有应答
+		void resolveActions();
+
+		// 处理玩家动作应答
+		void onActionResp(const NetMessage::Ptr& netMsg);
 
 		// 出牌后检查其他家明杠
 		bool checkGang(int fromSeat);
@@ -93,6 +103,13 @@ namespace NiuMa
 		int _lastDiscardTile;			// 最近打出的牌
 		int _lastDiscardSeat;			// 最近打牌的座位
 		std::shared_ptr<ZhejiangHuChecker> _checker;
+
+		// 待裁决的碰杠询问
+		int _actionTile = 0;
+		int _actionFromSeat = -1;
+		int _actionOptions[4] = { 0, 0, 0, 0 };		// 位掩码：1碰 2杠
+		int _actionChosen[4] = { -1, -1, -1, -1 };	// -1 未答 0 过
+		time_t _actionDeadline = 0;
 	};
 }
 

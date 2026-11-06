@@ -12,6 +12,7 @@ namespace NiuMa
 	{
 		addMessage(MsgZhejiangMahjongSync::TYPE);
 		addMessage(MsgZhejiangMahjongDiscard::TYPE);
+		addMessage(MsgZhejiangMahjongActionResp::TYPE);
 		addGameType(static_cast<int>(GameType::ZhejiangMahjong));
 	}
 
