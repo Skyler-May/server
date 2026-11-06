@@ -68,6 +68,9 @@ namespace NiuMa
 		bool tryConcealedKong(int seat);
 		void settle(int winner, bool zimo, int fromSeat, int fan, int score, const std::string& desc);
 		void onSync(const NetMessage::Ptr& netMsg);
+
+		// 战绩落库
+		void saveRoundRecord(int winner, bool zimo, int fromSeat, int fan, const std::string& desc);
 		void sendHand(int seat);
 		void addRobot(time_t nowTick);
 		void refreshSessions();
@@ -84,6 +87,8 @@ namespace NiuMa
 		int _kingCard;					// 财神牌（0 表示本局无财神）
 		std::vector<int> _wall;			// 牌墙（已洗）
 		std::vector<int> _scores;		// 各座位累计分
+		int _roundNo;					// 局号
+		int _lastDeltas[4];				// 最近一局的分数变化
 		bool _waitingDiscard;			// 是否在等待某人出牌（用于超时托管）
 		int _lastDiscardTile;			// 最近打出的牌
 		int _lastDiscardSeat;			// 最近打牌的座位

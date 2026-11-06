@@ -5,6 +5,8 @@
 #include "ZhejiangMahjongMessages.h"
 #include "ZhejiangHuChecker.h"
 #include "../GameDefines.h"
+#include "ZhejiangMahjongRecordTask.h"
+#include "MySql/MysqlPool.h"
 
 #include "Base/BaseUtils.h"
 #include "Base/Log.h"
@@ -47,6 +49,7 @@ namespace NiuMa
 		, _dealer(0)
 		, _current(0)
 		, _kingCard(0)
+		, _roundNo(0)
 		, _waitingDiscard(false)
 		, _lastDiscardTile(0)
 		, _lastDiscardSeat(-1)
@@ -729,11 +732,33 @@ namespace NiuMa
 			}
 		}
 
+		for (int i = 0; i < getMaxPlayerNums() && i < 4; i++)
+			_lastDeltas[i] = msg.deltas[i];
+		saveRoundRecord(winner, zimo, fromSeat, fan, desc);
+
 		sendMessageToAll(msg);
 		InfoS << "浙江麻将(ID:" << getId() << ")结算，赢家座位:" << winner
 			<< (zimo ? "(自摸)" : "(点炮)") << "，番:" << fan << "，得分:" << score << "，牌型:" << desc;
 	}
 
+	void ZhejiangMahjongRoom::saveRoundRecord(int winner, bool zimo, int fromSeat, int fan, const std::string& desc) {
+		std::shared_ptr<ZhejiangMahjongRecordTask> task = std::make_shared<ZhejiangMahjongRecordTask>();
+		task->_venueId = getId();
+		task->_roundNo = ++_roundNo;
+		task->_banker = _dealer;
+		task->_winner = winner;
+		task->_zimo = zimo ? 1 : 0;
+		task->_fromSeat = fromSeat;
+		task->_fan = fan;
+		task->_desc = desc;
+		for (int i = 0; i < getMaxPlayerNums(); i++) {
+			GameAvatar::Ptr avatar = getAvatar(i);
+			if (avatar)
+				task->_playerIds[i] = avatar->getPlayerId();
+			task->_deltas[i] = _lastDeltas[i];
+		}
+		MysqlPool::getSingleton().asyncQuery(task);
+	}
 	void ZhejiangMahjongRoom::onSync(const NetMessage::Ptr& netMsg) {
 		MsgZhejiangMahjongSync* inst = dynamic_cast<MsgZhejiangMahjongSync*>(netMsg->getMessage().get());
 		if (inst == nullptr)
