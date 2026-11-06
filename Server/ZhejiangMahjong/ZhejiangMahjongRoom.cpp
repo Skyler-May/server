@@ -48,6 +48,8 @@ namespace NiuMa
 		, _current(0)
 		, _kingCard(0)
 		, _waitingDiscard(false)
+		, _lastDiscardTile(0)
+		, _lastDiscardSeat(-1)
 	{
 		_scores.assign(MAX_SEATS, 0);
 		_checker = std::make_shared<ZhejiangHuChecker>();
@@ -90,6 +92,8 @@ namespace NiuMa
 
 	void ZhejiangMahjongRoom::clean() {
 		_wall.clear();
+		_lastDiscardTile = 0;
+		_lastDiscardSeat = -1;
 		_current = 0;
 		_waitingDiscard = false;
 	}
@@ -245,6 +249,9 @@ namespace NiuMa
 	}
 
 	void ZhejiangMahjongRoom::drawTile(int seat) {
+		// 递归调用保护：本局若已结束（自摸/点炮/流局），不再继续摸牌
+		if (_gameState != GameState::Playing)
+			return;
 		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 		if (avatar == nullptr)
 			return;
@@ -267,7 +274,7 @@ namespace NiuMa
 		// 自摸检查
 		int fan = 0, score = 0;
 		std::string desc;
-		if (checkHuFor(seat, true, -1, fan, score, desc)) {
+		if (checkHuFor(seat, true, -1, 0, fan, score, desc)) {
 			settle(seat, true, -1, fan, score, desc);
 			return;
 		}
@@ -275,6 +282,8 @@ namespace NiuMa
 	}
 
 	void ZhejiangMahjongRoom::waitDiscard(int seat) {
+		if (_gameState != GameState::Playing)
+			return;
 		_current = seat;
 		_waitingDiscard = true;
 		_stateTick = BaseUtils::getCurrentMillisecond();
@@ -330,6 +339,8 @@ namespace NiuMa
 		}
 		_waitingDiscard = false;
 		_stateTick = BaseUtils::getCurrentMillisecond();
+		_lastDiscardTile = tile;
+		_lastDiscardSeat = seat;
 		InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << "打出 0x"
 			<< std::hex << tile << std::dec;
 
@@ -338,6 +349,9 @@ namespace NiuMa
 		// 点炮检查
 		if (checkRobHu(seat))
 			return true;
+		// 若已结算（点炮胡），不再继续
+		if (_gameState != GameState::Playing)
+			return true;
 
 		// 下一家摸牌
 		int next = nextSeat(seat);
@@ -345,28 +359,38 @@ namespace NiuMa
 		return true;
 	}
 
-	bool ZhejiangMahjongRoom::checkHuFor(int seat, bool zimo, int fromSeat, int& fan, int& score, std::string& desc) {
+	bool ZhejiangMahjongRoom::checkHuFor(int seat, bool zimo, int fromSeat, int winTile, int& fan, int& score, std::string& desc) {
+		(void)fromSeat;
 		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 		if (avatar == nullptr)
 			return false;
+
 		std::vector<BYTE> cards;
 		const std::vector<int>& hand = avatar->getHand();
 		for (size_t i = 0; i < hand.size(); i++)
 			cards.push_back(static_cast<BYTE>(hand[i]));
-		if (cards.size() < 14)
-			return false;
 
-		int dummy = 0;
 		ZhejiangHuResult result;
-		// 14 张：最后一张视为刚摸到/点炮的牌
-		std::vector<BYTE> hand13(cards.begin(), cards.end() - 1);
 		bool hu = false;
-		if (zimo || fromSeat >= 0) {
-			hu = _checker->checkHu(hand13, cards.back(), zimo, result);
+		if (zimo) {
+			// 自摸：手牌已是 14 张，最后一张为刚摸到的牌
+			if (cards.size() < 14)
+				return false;
+			std::vector<BYTE> hand13(cards.begin(), cards.end() - 1);
+			hu = _checker->checkHu(hand13, cards.back(), true, result);
 			if (!hu)
-				hu = _checker->checkHu(cards, cards.back(), zimo, result);
+				hu = _checker->checkHu(cards, cards.back(), true, result);
 		}
-		(void)dummy;
+		else {
+			// 点炮：手牌 13 张 + 别人打出的牌
+			if (cards.size() != HAND_NUM || winTile == 0)
+				return false;
+			cards.push_back(static_cast<BYTE>(winTile));
+			std::vector<BYTE> hand13(cards.begin(), cards.end() - 1);
+			hu = _checker->checkHu(hand13, static_cast<BYTE>(winTile), false, result);
+			if (!hu)
+				hu = _checker->checkHu(cards, static_cast<BYTE>(winTile), false, result);
+		}
 		if (!hu)
 			return false;
 		fan = result.fan;
@@ -376,26 +400,29 @@ namespace NiuMa
 	}
 
 	bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
+		if (_lastDiscardTile == 0)
+			return false;
+		// 按出牌顺序逆时针遍历其他三家
 		for (int i = 1; i < getMaxPlayerNums(); i++) {
 			int seat = (fromSeat + i) % getMaxPlayerNums();
 			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 			if (avatar == nullptr || avatar->getHandNum() != HAND_NUM)
 				continue;
-			// 点炮：把打出的牌临时加进手牌判定
 			int fan = 0, score = 0;
 			std::string desc;
-			// 先把打出的牌加回？简化：直接判定 13 张 + 该牌
-			// 打出的牌已在 discardTile 之前从手牌移除，这里用 _lastDiscard 记录
-			// 简化实现：跳过（v1 只支持自摸）
-			(void)fan;
-			(void)score;
-			(void)desc;
-			break;
+			if (checkHuFor(seat, false, fromSeat, _lastDiscardTile, fan, score, desc)) {
+				InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 点炮胡！来自座位"
+					<< fromSeat << " 的 0x" << std::hex << _lastDiscardTile << std::dec;
+				settle(seat, false, fromSeat, fan, score, desc);
+				return true;
+			}
 		}
 		return false;
 	}
 
 	void ZhejiangMahjongRoom::autoDiscard(int seat) {
+		if (_gameState != GameState::Playing || !_waitingDiscard)
+			return;
 		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 		if (avatar == nullptr || avatar->getHandNum() == 0)
 			return;

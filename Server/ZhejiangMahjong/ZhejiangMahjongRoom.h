@@ -50,8 +50,8 @@ namespace NiuMa
 		void onDiscard(const NetMessage::Ptr& netMsg);
 		void autoDiscard(int seat);
 		bool discardTile(int seat, int tile, std::string& errMsg);
-		// 检查某座位是否可胡（hand 已含刚摸到/打出的牌）
-		bool checkHuFor(int seat, bool zimo, int fromSeat, int& fan, int& score, std::string& desc);
+		// 检查某座位是否可胡（zimo=true 用摸到的牌，否则用 winTile 点炮）
+		bool checkHuFor(int seat, bool zimo, int fromSeat, int winTile, int& fan, int& score, std::string& desc);
 		// 出牌后检查其他家点炮
 		bool checkRobHu(int fromSeat);
 		void settle(int winner, bool zimo, int fromSeat, int fan, int score, const std::string& desc);
@@ -73,6 +73,8 @@ namespace NiuMa
 		std::vector<int> _wall;			// 牌墙（已洗）
 		std::vector<int> _scores;		// 各座位累计分
 		bool _waitingDiscard;			// 是否在等待某人出牌（用于超时托管）
+		int _lastDiscardTile;			// 最近打出的牌
+		int _lastDiscardSeat;			// 最近打牌的座位
 		std::shared_ptr<ZhejiangHuChecker> _checker;
 	};
 }
