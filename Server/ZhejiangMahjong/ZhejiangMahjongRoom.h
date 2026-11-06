@@ -49,6 +49,9 @@ namespace NiuMa
 		void waitDiscard(int seat);
 		void onDiscard(const NetMessage::Ptr& netMsg);
 		void autoDiscard(int seat);
+
+		// 选择要打出的牌（孤张优先、留搭子，财神不打）
+		int pickDiscardTile(int seat) const;
 		bool discardTile(int seat, int tile, std::string& errMsg);
 		// 检查某座位是否可胡（zimo=true 用摸到的牌，否则用 winTile 点炮）
 		bool checkHuFor(int seat, bool zimo, int fromSeat, int winTile, int& fan, int& score, std::string& desc);

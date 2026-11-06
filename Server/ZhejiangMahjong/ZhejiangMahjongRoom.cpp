@@ -274,7 +274,8 @@ namespace NiuMa
 		// 自摸检查
 		int fan = 0, score = 0;
 		std::string desc;
-		if (checkHuFor(seat, true, -1, 0, fan, score, desc)) {
+		bool canHu = checkHuFor(seat, true, -1, 0, fan, score, desc);
+		if (canHu) {
 			settle(seat, true, -1, fan, score, desc);
 			return;
 		}
@@ -470,15 +471,66 @@ namespace NiuMa
 		return false;
 	}
 
+	// 出牌决策：给每张牌打"有用度"分，打掉最没用的（孤张、幺九优先），财神永远不打
+	int ZhejiangMahjongRoom::pickDiscardTile(int seat) const {
+		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+		if (avatar == nullptr || avatar->getHandNum() == 0)
+			return 0;
+		const std::vector<int>& hand = avatar->getHand();
+
+		int bestTile = 0;
+		int bestScore = 1 << 20;
+		for (size_t i = 0; i < hand.size(); i++) {
+			int tile = hand[i];
+			if (tile == _kingCard)
+				continue;					// 财神不打
+			int color = (tile & 0xF0) >> 4;
+			int value = tile & 0x0F;
+
+			int score = 0;
+			// 同张数
+			int same = 0;
+			for (size_t k = 0; k < hand.size(); k++) {
+				if (hand[k] == tile)
+					same++;
+			}
+			if (same >= 3) score += 12;
+			else if (same == 2) score += 7;
+
+			// 邻牌（同花色内 ±1 / ±2）
+			if (color != 3) {
+				for (size_t k = 0; k < hand.size(); k++) {
+					int other = hand[k];
+					if (((other & 0xF0) >> 4) != color)
+						continue;
+					int diff = (other & 0x0F) - value;
+					if (diff == 1 || diff == -1) score += 3;
+					else if (diff == 2 || diff == -2) score += 1;
+				}
+			}
+			// 幺九、字牌单张价值低
+			if (value == 1 || value == 9) score -= 1;
+			if (color == 3 && same == 1) score -= 2;
+
+			if (score < bestScore) {
+				bestScore = score;
+				bestTile = tile;
+			}
+		}
+		if (bestTile == 0 && !hand.empty())
+			bestTile = hand.back();
+		return bestTile;
+	}
+
 	void ZhejiangMahjongRoom::autoDiscard(int seat) {
 		if (_gameState != GameState::Playing || !_waitingDiscard)
 			return;
 		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
 		if (avatar == nullptr || avatar->getHandNum() == 0)
 			return;
-		// 简化托管：打出最后一张（排序后即最大的牌）
-		const std::vector<int>& hand = avatar->getHand();
-		int tile = hand.back();
+		int tile = pickDiscardTile(seat);
+		if (tile == 0)
+			tile = avatar->getHand().back();
 		std::string errMsg;
 		discardTile(seat, tile, errMsg);
 	}
