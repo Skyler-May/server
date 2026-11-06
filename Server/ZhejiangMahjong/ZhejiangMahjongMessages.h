@@ -306,7 +306,7 @@ namespace NiuMa
 
 		MSG_PACK_IMPL
 
-		MSGPACK_DEFINE_MAP(winner, zimo, fromSeat, fan, score, desc, deltas);
+		MSGPACK_DEFINE_MAP(winner, zimo, fromSeat, fan, score, desc, deltas, winners, winnerFans, winnerDescs, winnerScores);
 
 	public:
 		int winner;			// 赢家座位
@@ -316,6 +316,12 @@ namespace NiuMa
 		int score;			// 得分
 		std::string desc;	// 番型描述
 		std::vector<int> deltas;
+
+		// 一炮多响：全部赢家
+		std::vector<int> winners;
+		std::vector<int> winnerFans;
+		std::vector<std::string> winnerDescs;
+		std::vector<int> winnerScores;
 	};
 }
 

@@ -76,6 +76,12 @@ namespace NiuMa
 
 		// 摸牌后检查自己是否可以暗杠（返回 true 表示杠了，需要补摸）
 		bool tryConcealedKong(int seat);
+
+		// 补杠：碰过的牌又摸到第 4 张
+		bool tryUpgradeKong(int seat);
+
+		// 一炮多响结算
+		void settleMulti(const std::vector<int>& winners, int fromSeat);
 		void settle(int winner, bool zimo, int fromSeat, int fan, int score, const std::string& desc);
 		void onSync(const NetMessage::Ptr& netMsg);
 

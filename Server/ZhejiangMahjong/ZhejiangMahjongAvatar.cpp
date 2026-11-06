@@ -52,8 +52,30 @@ namespace NiuMa
 		});
 	}
 
-	void ZhejiangMahjongAvatar::addMeld(int tile) {
+	void ZhejiangMahjongAvatar::addMeld(int tile, bool kong) {
 		_melds.push_back(tile);
+		if (kong)
+			_kongs.push_back(tile);
+	}
+
+	bool ZhejiangMahjongAvatar::isKongMeld(int tile) const {
+		for (size_t i = 0; i < _kongs.size(); i++) {
+			if (_kongs[i] == tile)
+				return true;
+		}
+		return false;
+	}
+
+	bool ZhejiangMahjongAvatar::upgradeToKong(int tile) {
+		for (size_t i = 0; i < _melds.size(); i++) {
+			if (_melds[i] != tile)
+				continue;
+			if (isKongMeld(tile))
+				return false;
+			_kongs.push_back(tile);
+			return true;
+		}
+		return false;
 	}
 
 	const std::vector<int>& ZhejiangMahjongAvatar::getMelds() const {
@@ -67,6 +89,7 @@ namespace NiuMa
 	void ZhejiangMahjongAvatar::clear() {
 		_hand.clear();
 		_melds.clear();
+		_kongs.clear();
 		setReady(false);
 	}
 }

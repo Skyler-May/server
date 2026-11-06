@@ -285,7 +285,7 @@ namespace NiuMa
 
 		// 暗杠检查（杠完补摸，最多连续 4 次）
 		int kongLoop = 0;
-		while (kongLoop < 4 && tryConcealedKong(seat)) {
+		while (kongLoop < 4 && (tryConcealedKong(seat) || tryUpgradeKong(seat))) {
 			kongLoop++;
 			if (_wall.empty()) {
 				InfoS << "浙江麻将(ID:" << getId() << ")牌墙已空，流局";
@@ -487,7 +487,8 @@ namespace NiuMa
 bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
 		if (_lastDiscardTile == 0)
 			return false;
-		// 按出牌顺序逆时针遍历其他三家
+		// 收集所有能胡的座位（一炮多响）
+		std::vector<int> winners;
 		for (int i = 1; i < getMaxPlayerNums(); i++) {
 			int seat = (fromSeat + i) % getMaxPlayerNums();
 			ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
@@ -500,11 +501,13 @@ bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
 			if (checkHuFor(seat, false, fromSeat, _lastDiscardTile, fan, score, desc)) {
 				InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 点炮胡！来自座位"
 					<< fromSeat << " 的 0x" << std::hex << _lastDiscardTile << std::dec;
-				settle(seat, false, fromSeat, fan, score, desc);
-				return true;
+				winners.push_back(seat);
 			}
 		}
-		return false;
+		if (winners.empty())
+			return false;
+		settleMulti(winners, fromSeat);
+		return true;
 	}
 
 	// 出牌决策：优先打"能听牌"的那张；否则按孤张优先打分
@@ -951,6 +954,102 @@ bool ZhejiangMahjongRoom::checkRobHu(int fromSeat) {
 			<< "（来自座位" << fromSeat << "）";
 		_lastDiscardTile = 0;
 		drawTile(seat);
+	}
+
+
+	// 补杠：手里有第 4 张、且之前碰过这张
+	bool ZhejiangMahjongRoom::tryUpgradeKong(int seat) {
+		if (_gameState != GameState::Playing)
+			return false;
+		ZhejiangMahjongAvatar* avatar = dynamic_cast<ZhejiangMahjongAvatar*>(getAvatar(seat).get());
+		if (avatar == nullptr)
+			return false;
+		const std::vector<int>& melds = avatar->getMelds();
+		const std::vector<int>& hand = avatar->getHand();
+		for (size_t m = 0; m < melds.size(); m++) {
+			int tile = melds[m];
+			if (tile == _kingCard)
+				continue;
+			if (avatar->isKongMeld(tile))
+				continue;
+			int inHand = 0;
+			for (size_t k = 0; k < hand.size(); k++) {
+				if (hand[k] == tile)
+					inHand++;
+			}
+			if (inHand < 1)
+				continue;
+			if (!avatar->upgradeToKong(tile))
+				continue;
+			avatar->removeTile(tile);
+
+			MsgZhejiangMahjongGang msg;
+			msg.seat = seat;
+			msg.tile = tile;
+			msg.fromSeat = -1;
+			msg.concealed = false;
+			sendMessageToAll(msg);
+			sendHand(seat);
+			InfoS << "浙江麻将(ID:" << getId() << ")座位" << seat << " 补杠 0x"
+				<< std::hex << tile << std::dec;
+			return true;
+		}
+		return false;
+	}
+
+	// 一炮多响结算：每个赢家分别计分，点炮者赔付总和
+	void ZhejiangMahjongRoom::settleMulti(const std::vector<int>& winners, int fromSeat) {
+		_gameState = GameState::Settled;
+		_stateTick = BaseUtils::getCurrentMillisecond();
+		_waitingDiscard = false;
+
+		MsgZhejiangMahjongGameOver msg;
+		msg.zimo = false;
+		msg.fromSeat = fromSeat;
+		msg.deltas.assign(getMaxPlayerNums(), 0);
+		int totalPay = 0;
+		for (size_t i = 0; i < winners.size(); i++) {
+			int seat = winners[i];
+			int fan = 0, score = 0;
+			std::string desc;
+			if (!checkHuFor(seat, false, fromSeat, _lastDiscardTile, fan, score, desc))
+				continue;
+			msg.winners.push_back(seat);
+			msg.winnerFans.push_back(fan);
+			msg.winnerScores.push_back(score);
+			msg.winnerDescs.push_back(desc);
+			msg.deltas[seat] += score;
+			totalPay += score;
+			if (_lastDeltas[seat] >= 0)
+				_lastDeltas[seat] += score;
+		}
+		if (msg.winners.empty()) {
+			// 理论上不会发生
+			settle(-1, false, -1, 0, 0, "流局");
+			return;
+		}
+		msg.winner = msg.winners[0];
+		msg.fan = msg.winnerFans[0];
+		msg.score = msg.winnerScores[0];
+		msg.desc = msg.winnerDescs[0];
+		msg.deltas[fromSeat] -= totalPay;
+		_lastDeltas[fromSeat] -= totalPay;
+		if (msg.winners.size() > 1)
+			msg.desc += "(一炮多响)";
+
+		for (int i = 0; i < getMaxPlayerNums() && i < 4; i++)
+			_lastDeltas[i] = msg.deltas[i];
+		saveRoundRecord(msg.winner, false, fromSeat, msg.fan, msg.desc);
+		sendMessageToAll(msg);
+
+		std::ostringstream os;
+		os << "浙江麻将(ID:" << getId() << ")一炮多响结算，赢家:";
+		for (size_t i = 0; i < msg.winners.size(); i++) {
+			if (i) os << "、";
+			os << msg.winners[i] << "(" << msg.winnerFans[i] << "番" << msg.winnerScores[i] << "分)";
+		}
+		os << "，点炮座位:" << fromSeat;
+		InfoS << os.str();
 	}
 
 }
