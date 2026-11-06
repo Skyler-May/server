@@ -111,16 +111,9 @@ namespace NiuMa
 		result.hu = hu;
 		if (!hu)
 			return false;
-		if (neat3 && !vendorHu) {
-			result.desc = "平胡";
-			result.baseScore = 1;
-			return true;
-		}
-		if (neat2 && !vendorHu) {
-			result.desc = "七小对";
-			result.baseScore = 2;
-			return true;
-		}
+		// 统一走自己的番型计算
+		calcFan(cards, cbCardIndex, jokers, zimo, result);
+		return true;
 
 		result.zimo = court.IsZimo();
 		// 简化番数：有财神按财神个数，无财神额外加分（具体分值由房间层再算）
@@ -208,6 +201,121 @@ namespace NiuMa
 			}
 		}
 		return false;
+	}
+	// ---- 番型判定与计分 ----
+	namespace {
+		// 是否清一色：所有牌同一花色且无字牌
+		bool isQingYiSe(const BYTE idx[MAX_INDEX]) {
+			int suit = -1;
+			for (int i = 0; i < CARD_KING_INDEX; i++) {
+				if (idx[i] == 0)
+					continue;
+				if (i >= 27)
+					return false;			// 含字牌
+				int s = i / 9;
+				if (suit < 0)
+					suit = s;
+				else if (suit != s)
+					return false;
+			}
+			return suit >= 0;
+		}
+
+		// 是否碰碰胡：所有面子都是刻子（不含顺子）
+		bool allTriples(BYTE idx[MAX_INDEX]) {
+			int i = 0;
+			while (i < CARD_KING_INDEX && idx[i] == 0)
+				i++;
+			if (i >= CARD_KING_INDEX)
+				return true;
+			if (idx[i] >= 3) {
+				idx[i] -= 3;
+				bool ok = allTriples(idx);
+				idx[i] += 3;
+				if (ok)
+					return true;
+			}
+			return false;
+		}
+
+		bool isPengPengHu(const BYTE cbCardIndex[MAX_INDEX]) {
+			for (int eye = 0; eye < CARD_KING_INDEX; eye++) {
+				if (cbCardIndex[eye] < 2)
+					continue;
+				BYTE work[MAX_INDEX];
+				for (int k = 0; k < MAX_INDEX; k++)
+					work[k] = cbCardIndex[k];
+				work[eye] -= 2;
+				if (allTriples(work))
+					return true;
+			}
+			return false;
+		}
+	}
+
+	// 计算番型（在 checkHu 成功后调用）
+	void ZhejiangHuChecker::calcFan(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX],
+		int jokers, bool zimo, ZhejiangHuResult& result) {
+		result.fans.clear();
+		result.fan = 0;
+		result.baseScore = 1;
+		result.kingCount = jokers;
+
+		bool qiXiaoDui = (cards.size() == 14) && _logic.IsNeat2(cbCardIndex);
+		bool qingYiSe = isQingYiSe(cbCardIndex);
+		bool pengPeng = isPengPengHu(cbCardIndex);
+
+		// 牌型番
+		if (qiXiaoDui && qingYiSe) {
+			result.fan += 4;
+			result.fans.push_back("清七对");
+		}
+		else if (qiXiaoDui) {
+			result.fan += 2;
+			result.fans.push_back("七小对");
+		}
+		else if (pengPeng) {
+			result.fan += 1;
+			result.fans.push_back("碰碰胡");
+		}
+		else {
+			result.fans.push_back("平胡");
+		}
+
+		if (qingYiSe && !qiXiaoDui) {
+			result.fan += 2;
+			result.fans.push_back("清一色");
+		}
+
+		// 自摸
+		if (zimo) {
+			result.fan += 1;
+			result.fans.push_back("自摸");
+		}
+
+		// 财神：无财神 +1 番；每张财神 +1 番（网狐常量 SCORE_ADD_NO_KING=2 / SCORE_ADD_PER_KING=1）
+		if (jokers == 0) {
+			result.fan += 1;
+			result.fans.push_back("无财神");
+		}
+		else {
+			result.fan += jokers;
+			char buf[32];
+			snprintf(buf, sizeof(buf), "%d财神", jokers);
+			result.fans.push_back(buf);
+		}
+
+		// 得分：底分 * 2^番（封顶 2^10）
+		int capped = result.fan > 10 ? 10 : result.fan;
+		result.score = result.baseScore << capped;
+
+		// 描述
+		result.desc.clear();
+		for (size_t i = 0; i < result.fans.size(); i++) {
+			if (i)
+				result.desc += "+";
+			result.desc += result.fans[i];
+		}
 	}
 	std::string ZhejiangHuChecker::cardToText(BYTE card) {
 		const char* names[] = { "万", "条", "筒", "字" };

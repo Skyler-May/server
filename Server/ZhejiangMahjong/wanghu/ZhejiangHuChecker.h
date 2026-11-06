@@ -19,16 +19,22 @@ namespace NiuMa
 	{
 		bool hu = false;			// 是否可胡
 		bool zimo = false;			// 是否自摸
-		int fan = 0;				// 番数（简化：按网狐 tagHuCourt 的计分项累加）
-		int baseScore = 0;			// 基础分
-		std::string desc;			// 牌型描述
+		int fan = 0;				// 番数
+		int baseScore = 0;			// 基础分（底分 1）
+		int score = 0;				// 最终得分 = 底分 * 2^番
+		int kingCount = 0;			// 手上财神张数
+		std::string desc;			// 牌型描述（如 "平胡+自摸+无财神"）
+		std::vector<std::string> fans;	// 番型明细
 
 		void reset() {
 			hu = false;
 			zimo = false;
 			fan = 0;
 			baseScore = 0;
+			score = 0;
+			kingCount = 0;
 			desc.clear();
+			fans.clear();
 		}
 	};
 
@@ -52,6 +58,10 @@ namespace NiuMa
 		 * @return 是否可胡
 		 */
 		bool checkHu(const std::vector<BYTE>& cards, BYTE currentCard, bool zimo, ZhejiangHuResult& result);
+
+		// 计算番型与得分（checkHu 成功后调用）
+		void calcFan(const std::vector<BYTE>& cards, BYTE cbCardIndex[MAX_INDEX],
+			int jokers, bool zimo, ZhejiangHuResult& result);
 
 		// 牌值转文字（便于日志）
 		static std::string cardToText(BYTE card);
